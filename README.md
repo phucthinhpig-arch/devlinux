@@ -161,7 +161,9 @@ session-01/
     └── Makefile
 ```
 
-> ⚠️ Mỗi Exercise bắt buộc có Makefile — không có Makefile sẽ bị điểm 0 toàn bài.
+> ⚠️ Mỗi Exercise trong đề bài có ghi rõ loại:
+> - `[build]` — **bắt buộc có Makefile**, hệ thống sẽ build và chạy thử. Không có Makefile → điểm 0 toàn bài.
+> - `[review-only]` — không cần Makefile, hệ thống chỉ review code tĩnh (Yocto recipe, Device Tree, v.v.).
 
 ---
 
