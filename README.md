@@ -12,7 +12,7 @@ devlinux/
 │   └── K26.1/
 │       └── ten-hoc-vien/        ← giáo viên tạo sẵn
 │           ├── session-01/      ← giáo viên tạo sẵn
-│           │   ├── homework.md  ← học viên tạo, copy đề bài vào
+│           │   ├── homework.md  ← giáo viên chuẩn bị sẵn — KHÔNG xoá
 │           │   ├── Exercise_1/  ← học viên tự tạo
 │           │   │   ├── main.c
 │           │   │   └── Makefile
