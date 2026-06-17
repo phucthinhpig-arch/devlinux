@@ -33,17 +33,27 @@ jobs:
               "Accept": "application/vnd.github.v3+json"
           }
 
-          # Get all PRs (open, closed, merged)
-          url = f"https://api.github.com/repos/{REPO}/pulls?state=all&per_page=100"
-          response = requests.get(url, headers=headers)
+          # Get all PRs with pagination (supports unlimited PRs)
+          all_prs = []
+          page = 1
+          while True:
+              url = f"https://api.github.com/repos/{REPO}/pulls?state=all&per_page=100&page={page}"
+              response = requests.get(url, headers=headers, timeout=10)
 
-          if response.status_code != 200:
-              print(f"Error fetching PRs: {response.text}")
-              exit(1)
+              if response.status_code != 200:
+                  print(f"Error fetching PRs page {page}: {response.text}")
+                  exit(1)
 
-          prs = response.json()
+              prs = response.json()
+              if not prs:  # Empty page = reached end
+                  break
 
-          for pr in prs:
+              all_prs.extend(prs)
+              page += 1
+
+          print(f"📊 Found {len(all_prs)} PRs across {page-1} pages")
+
+          for pr in all_prs:
               number = pr["number"]
               branch = pr["head"]["ref"]
 
