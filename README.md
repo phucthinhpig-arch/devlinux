@@ -94,11 +94,11 @@ Hàng tuần, hệ thống tự động **kiểm tra xem mỗi học viên đã 
 
 File được cập nhật định kỳ theo lịch của lớp học:
 
-```
-Student,Session-01,Session-02,Session-03,...,Session-20,Submission %
-nguyen-quoc-viet,✅ On time,⏰ Late,❌ Not yet,...,⚪ N/A,65.0%
-tran-anh-tu,✅ On time,✅ On time,⏰ Late,...,⚪ N/A,72.5%
-```
+| Student | Session-01 | Session-02 | Session-03 | Session-04 | ... | Session-20 | Submission % |
+|---------|-----------|-----------|-----------|-----------|-----|-----------|---|
+| nguyen-quoc-viet | ✅ On time | ⏰ Late | ❌ Not yet | ⚪ N/A | ... | ⚪ N/A | 65.0% |
+| tran-anh-tu | ✅ On time | ✅ On time | ⏰ Late | ✅ On time | ... | ⚪ N/A | 72.5% |
+| le-van-c | ⏰ Late | ⏰ Late | ⏰ Late | ❌ Not yet | ... | ⚪ N/A | 37.5% |
 
 **Giải thích Status cho từng buổi:**
 - `✅ On time` — **nộp bài trước deadline + bài tập đạt yêu cầu**
