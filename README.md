@@ -10,6 +10,11 @@
 devlinux/
 ├── embedded-linux/
 │   └── K26.1/
+│       ├── class.json           ← danh sách học viên + GitHub usernames
+│       ├── homeworks/           ← chứa deadline + báo cáo
+│       │   ├── session-01.md    ← chứa deadline (dòng 2)
+│       │   ├── session-02.md
+│       │   └── homework_report.csv  ← báo cáo tự động (mỗi chủ nhật)
 │       └── ten-hoc-vien/        ← giáo viên tạo sẵn
 │           ├── session-01/      ← giáo viên tạo sẵn
 │           │   ├── homework.md  ← giáo viên chuẩn bị sẵn — KHÔNG xoá
@@ -27,6 +32,94 @@ devlinux/
 ├── embedded-mcu/
 └── c-advance/
 ```
+
+---
+
+## 📅 Xem Deadline Bài Tập
+
+**Deadline của mỗi buổi học được giáo viên đặt trong file `homeworks/session-XX.md`**
+
+### Cách xem deadline:
+
+1. **Trên GitHub web:**
+   - Vào thư mục `{môn}/{Khoá}/homeworks/`
+   - Click file `session-XX.md`
+   - Xem dòng thứ 2 chứa: `**Deadline: YYYY-MM-DD HH:MM:SS**`
+
+2. **Trên máy (sau khi pull code):**
+   ```bash
+   # Ví dụ: xem deadline session-01
+   cat embedded-linux/K26.1/homeworks/session-01.md | head -3
+   
+   # Output:
+   # # Assignment — session-01
+   # **Deadline: 2026-06-14 23:59:00**
+   # ---
+   ```
+
+3. **Hoặc đơn giản nhất:**
+   - Vào folder `{môn}/{Khoá}/homeworks/`
+   - Mở file `session-XX.md` với text editor
+   - Dòng thứ 2 là deadline
+
+### Format deadline:
+
+```
+**Deadline: YYYY-MM-DD HH:MM:SS**
+```
+
+Ví dụ:
+- `2026-06-14 23:59:00` = 14/6/2026 lúc 23:59
+- `2026-06-21 18:00:00` = 21/6/2026 lúc 18:00
+
+> ⏰ **Lưu ý:** Deadline tính theo **UTC timezone**. Nộp bài trước thời gian deadline = `✅ On time`, sau deadline = `⏰ Late`
+
+---
+
+## 📊 Xem Báo Cáo Nộp Bài (Attendance Report)
+
+Hàng tuần, hệ thống tự động **kiểm tra xem mỗi học viên đã nộp bài hay chưa**, so sánh với deadline, và tạo file báo cáo CSV.
+
+### Vị trí file báo cáo:
+
+```
+{môn}/{Khoá}/homeworks/homework_report.csv
+```
+
+**Ví dụ:**
+- `embedded-linux/K26.1/homeworks/homework_report.csv`
+- `rtos/K26.2/homeworks/homework_report.csv`
+
+### Nội dung file CSV:
+
+File được tạo tự động mỗi **chủ nhật 23:59 UTC** (hoặc có thể trigger thủ công):
+
+```
+Student,Session-01,Session-02,Session-03,...
+nguyen-quoc-viet,✅ On time,⏰ Late,❌ Not yet,...
+tran-anh-tu,✅ On time,✅ On time,⏰ Late,...
+```
+
+**Giải thích Status:**
+- `✅ On time` — nộp bài trước deadline
+- `⏰ Late` — nộp bài sau deadline (muộn)
+- `❌ Not yet` — chưa nộp bài
+- Nếu GitHub username = "none" trong class.json → luôn `❌ Not yet`
+
+### Cách xem báo cáo:
+
+1. **Trên GitHub web:**
+   - Vào thư mục `{môn}/{Khoá}/homeworks/`
+   - Tìm file `homework_report.csv`
+   - GitHub tự động render thành bảng (dễ nhìn)
+
+2. **Tải về máy:**
+   ```bash
+   git pull
+   cat embedded-linux/K26.1/homeworks/homework_report.csv
+   ```
+
+> 💡 **Lưu ý:** Báo cáo được tạo dựa trên PR của học viên, không phải merge PR. Nộp bài = tạo PR, không cần merge để được tính là đã nộp.
 
 ---
 
