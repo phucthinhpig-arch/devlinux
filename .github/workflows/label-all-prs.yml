@@ -3,6 +3,11 @@ name: Label All PRs
 on:
   workflow_dispatch:
 
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
 jobs:
   label-prs:
     runs-on: ubuntu-latest
