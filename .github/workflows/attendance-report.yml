@@ -25,21 +25,20 @@ jobs:
       # Pull latest changes to avoid conflicts
       - name: Pull latest changes
         run: |
-          echo "📍 Before pull:"
+          echo "📍 Before fetch:"
           git log --oneline -1
           git status
           echo "---"
-          git pull origin master
-          echo "📍 After pull:"
+          git fetch origin master
+          git reset --hard origin/master
+          echo "📍 After reset to origin/master:"
           git log --oneline -1
           git status
 
-          # Remove reviewer-core from git tracking if still tracked (due to old commits)
-          if git ls-files | grep -q "^reviewer-core"; then
-            echo "⚠️ Removing reviewer-core from git tracking..."
-            git rm --cached reviewer-core -r
-            git commit -m "ci: remove reviewer-core from tracking (now ignored)"
-            git push origin master
+          # Clean any untracked reviewer-core folder
+          if [ -d reviewer-core ]; then
+            echo "⚠️ Removing untracked reviewer-core folder..."
+            rm -rf reviewer-core
           fi
 
       # Setup SSH to clone private reviewer repo
