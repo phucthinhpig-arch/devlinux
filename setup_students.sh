@@ -4,11 +4,17 @@
 # =============================================================
 #
 # CÁCH DÙNG
-#   Chạy từ root của repo devlinux:
-#     bash setup_students.sh
+#   1. Setup tất cả lớp trong repo:
+#        bash setup_students.sh
+#
+#   2. Setup 1 lớp cụ thể:
+#        bash setup_students.sh <subject> <course>
+#        bash setup_students.sh c-basic K26.2
+#        bash setup_students.sh embedded-linux K26.1
 #
 # MÔ TẢ
 #   Script tự động tìm tất cả file class.json trong repo
+#   (hoặc 1 lớp cụ thể nếu có tham số)
 #   và tạo thư mục học viên + thư mục session tương ứng.
 #
 #   Cấu trúc file class.json (đặt trong mỗi thư mục khoá):
@@ -56,6 +62,8 @@
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
+SUBJECT="${1:-}"
+COURSE="${2:-}"
 CREATED=0
 SKIPPED=0
 ERRORS=0
@@ -63,10 +71,24 @@ ERRORS=0
 echo "======================================"
 echo "  DevLinux — Setup Student Folders"
 echo "  Root: $REPO_ROOT"
+if [ -n "$SUBJECT" ] && [ -n "$COURSE" ]; then
+    echo "  Mode: Single class ($SUBJECT/$COURSE)"
+else
+    echo "  Mode: All classes"
+fi
 echo "======================================"
 echo ""
 
-# Tìm tất cả class.json trong repo
+# Build find command based on arguments
+if [ -n "$SUBJECT" ] && [ -n "$COURSE" ]; then
+    # Setup 1 lớp cụ thể
+    FIND_CMD="find \"$REPO_ROOT/$SUBJECT/$COURSE\" -maxdepth 1 -name \"class.json\" -not -path \"*/.git/*\""
+else
+    # Setup tất cả lớp
+    FIND_CMD="find \"$REPO_ROOT\" -mindepth 3 -name \"class.json\" -not -path \"*/.git/*\" | sort"
+fi
+
+# Tìm class.json
 while IFS= read -r class_file; do
     course_dir="$(dirname "$class_file")"
     rel_course="${course_dir#$REPO_ROOT/}"
@@ -122,7 +144,7 @@ for student, github in data.get('students', {}).items():
 ")
     echo ""
 
-done < <(find "$REPO_ROOT" -mindepth 3 -name "class.json" -not -path "*/.git/*" | sort)
+done < <(eval "$FIND_CMD")
 
 echo "======================================"
 echo "  ✅ Tạo mới : $CREATED thư mục"

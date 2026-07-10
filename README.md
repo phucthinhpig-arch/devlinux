@@ -235,7 +235,10 @@ cd devlinux
 **Bước 4.1 — Sync fork từ repo của giáo viên (trên GitHub web)**
 
 1. Vào fork của bạn trên GitHub
-2. Nhấn nút **Sync fork** → chọn **Update branch**
+2. **⚠️ Chú ý:** Kiểm tra branch dropdown góc trên trái — **PHẢI là `master`** mới sync
+3. Nhấn nút **Sync fork** → chọn **Update branch**
+
+> 🔴 **Lỗi thường gặp:** Nếu đang trên branch session cũ (ví dụ `embedded-linux/K26.1/...`) mà nhấn Sync fork, sẽ đồng bộ hóa sai branch. Luôn chuyển sang **`master`** trước khi sync!
 
 **Bước 4.2 — Cập nhật code cục bộ và tạo branch**
 
@@ -463,7 +466,10 @@ Làm lại **Bước 4 → Bước 7** mỗi buổi:
 **Bước 4.1 — Sync fork từ repo của giáo viên (trên GitHub web)**
 
 1. Vào fork của bạn trên GitHub
-2. Nhấn nút **Sync fork** → chọn **Update branch**
+2. **⚠️ Chú ý:** Kiểm tra branch dropdown góc trên trái — **PHẢI là `master`** mới sync
+3. Nhấn nút **Sync fork** → chọn **Update branch**
+
+> 🔴 **Lỗi thường gặp:** Nếu đang trên branch session cũ (ví dụ `embedded-linux/K26.1/...`) mà nhấn Sync fork, sẽ đồng bộ hóa sai branch. Luôn chuyển sang **`master`** trước khi sync!
 
 **Bước 4.2 → Bước 7 — Tạo branch, làm bài, commit và push:**
 
