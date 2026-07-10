@@ -6,21 +6,21 @@
 
 **Mô phỏng sản phẩm thật:** hệ thống chat dạng IRC/Slack rút gọn.
 
-**Kiến thức áp dụng:** Socket TCP, epoll, File I/O (lưu tài khoản), băm mật khẩu, quản lý phiên đồng thời.
+**Kiến thức áp dụng:** Socket TCP, POSIX pthread, File I/O (lưu tài khoản), băm mật khẩu, quản lý phiên đồng thời, thread synchronization (mutex).
 
 > Quy ước ID requirement (`P3-M1`, `P3-N1`...) dùng chung giữa đề bài này, `DESIGN.md` học viên nộp, và rubric chấm điểm — xem thêm quy định chung ở `00_Chung/QUY_DINH_CHUNG.md`.
 
 ---
 
 ## Problem Statement
-Xây dựng server chat CLI đa người dùng qua TCP, hỗ trợ đăng ký/đăng nhập và chat chung trong **1 phòng broadcast duy nhất**, toàn bộ xử lý đồng thời nhiều client bằng **epoll** (không thread-per-client).
+Xây dựng server chat CLI đa người dùng qua TCP, hỗ trợ đăng ký/đăng nhập và chat chung trong **1 phòng broadcast duy nhất**, toàn bộ xử lý đồng thời nhiều client bằng **1 thread phục vụ 1 client** (thread-per-client model) với synchronization sử dụng mutex cho shared state.
 
 ## Functional Requirements
 
 **Must-have:**
 - **P3-M1.** Đăng ký/đăng nhập tài khoản, mật khẩu lưu ở dạng **hash** (không lưu plaintext), lưu trong file.
 - **P3-M2.** Sau khi đăng nhập, mọi tin nhắn gửi lên đều **broadcast tới toàn bộ user đang online** (1 phòng chung duy nhất, không cần tạo/quản lý nhiều phòng).
-- **P3-M3.** Server dùng epoll để xử lý toàn bộ kết nối trên 1 (hoặc ít) thread, không được dùng 1 thread/1 client.
+- **P3-M3.** Server dùng **thread-per-client model**: main thread chấp nhận kết nối, mỗi client được xử lý bởi 1 pthread riêng với blocking I/O. Dùng **mutex để synchronization** khi access shared state (clients array, broadcast).
 - **P3-M4.** Xử lý client ngắt kết nối đột ngột (crash/kill) mà không làm sập server hay rò rỉ tài nguyên.
 - **P3-M5.** Danh sách user đang online.
 - **P3-M6.** Nhập sai username/password: server trả về lỗi rõ ràng, **không** cho biết cụ thể là sai username hay sai password (tránh lộ thông tin tài khoản nào tồn tại), client cho phép nhập lại tối đa 3 lần trước khi tự ngắt kết nối.
@@ -35,48 +35,103 @@ Xây dựng server chat CLI đa người dùng qua TCP, hỗ trợ đăng ký/đ
 
 ## Design Hints (lưu ý kỹ thuật, tránh bẫy thường gặp)
 - Thiết kế protocol đơn giản dạng text-based (giống IRC) hoặc JSON-line, phải document rõ ràng trong README.
-- Dùng buffer riêng cho từng client để xử lý trường hợp đọc/ghi không trọn vẹn (partial read/write) qua non-blocking socket.
-- Đây là project cố ý có bug đồng bộ hoá (nếu dùng thêm thread phụ) để sinh viên phải debug bằng Helgrind/GDB.
-- Lịch sử tin nhắn nên ghi ra file (append-only) mỗi khi có tin nhắn mới, và đọc lại toàn bộ file này để gửi cho client vừa đăng nhập — chú ý dùng `flock`/`fcntl` nếu có khả năng nhiều nơi ghi đồng thời vào file log.
+- **Thread-per-client architecture:** Main thread chỉ lắng nghe & accept kết nối. Mỗi client được xử lý bởi 1 pthread riêng gọi `recv()` và `send()` blocking (đơn giản hơn non-blocking socket).
+- **Shared state synchronization:** Dùng `pthread_mutex_t` để bảo vệ:
+  - Mảng `clients[]` (thêm/xóa client, access username & fd)
+  - Broadcast: khi gửi tin nhắn, lock mutex trước khi duyệt `clients[]`
+  - Message history file: dùng `flock()` khi đọc/ghi
+- Lịch sử tin nhắn nên ghi ra file (append-only) mỗi khi có tin nhắn mới, và đọc lại toàn bộ file này để gửi cho client vừa đăng nhập — chú ý dùng `flock()` để ngăn race condition khi nhiều thread ghi đồng thời.
 - Gửi lịch sử tin nhắn cho client mới nên tách biệt rõ với luồng broadcast realtime để tránh lẫn lộn thứ tự (client cần nhận đủ và đúng thứ tự lịch sử trước khi nhận tin nhắn mới).
 
 ## Gợi ý thiết kế cho học viên
 
-**Gợi ý kiến trúc tổng thể:** đây là bài chỉ cần **1 vòng lặp epoll duy nhất** ở trung tâm, không cần nhiều thread. Hình dung server gồm:
-- 1 mảng/map `clients[fd] → struct client_info` (username, buffer đọc dở, trạng thái đăng nhập, số lần nhập sai...).
-- Vòng lặp `epoll_wait` chính xử lý 3 loại sự kiện: (1) fd lắng nghe có kết nối mới → `accept`, thêm vào epoll; (2) fd client có dữ liệu để đọc → đọc vào buffer riêng của client đó, kiểm tra đã đủ 1 message chưa (theo delimiter đã chọn); (3) phát hiện lỗi/đóng kết nối → dọn dẹp.
-- Khi 1 client gửi xong 1 message hợp lệ, code **không gửi trả ngay trong vòng lặp đọc** mà đẩy vào 1 hàm `broadcast_to_all()` duyệt qua toàn bộ `clients[]` còn lại và gửi.
+**Gợi ý kiến trúc tổng thể (Thread-per-client):** 
+- 1 main thread lắng nghe & accept kết nối mới vào loop: `accept() → pthread_create() → client thread xử lý`
+- 1 mảng/map `clients[] → struct client_info` (fd, username, authenticated, mutex-protected)
+- Mỗi client thread gọi `recv()` blocking tới khi nhận đủ 1 message (delimiter `\n`), xử lý message, gọi `broadcast_to_all()` nếu cần gửi
+- Broadcast duyệt qua `clients[]` với lock mutex, gửi `send()` tới từng authenticated client
+- Client thread clean exit khi client disconnect, cập nhật `clients[]` với lock mutex
 
-### Chi tiết kỹ thuật — epoll & Non-blocking Socket
+### Chi tiết kỹ thuật — Thread-per-client & Blocking Socket
 
-**Khung vòng lặp chính gợi ý:**
+**Khung kiến trúc gợi ý:**
 ```c
-int epfd = epoll_create1(0);
-// set listen_fd non-blocking, add vào epoll với EPOLLIN
-struct epoll_event ev = { .events = EPOLLIN, .data.fd = listen_fd };
-epoll_ctl(epfd, EPOLL_CTL_ADD, listen_fd, &ev);
+typedef struct {
+    int fd;
+    char username[64];
+    int authenticated;
+} client_t;
 
-while (1) {
-    int n = epoll_wait(epfd, events, MAX_EVENTS, -1);
-    for (int i = 0; i < n; i++) {
-        if (events[i].data.fd == listen_fd) {
-            int client_fd = accept(listen_fd, ...);
-            set_nonblocking(client_fd);
-            struct epoll_event cev = { .events = EPOLLIN, .data.fd = client_fd };
-            epoll_ctl(epfd, EPOLL_CTL_ADD, client_fd, &cev);
-            init_client_buffer(client_fd);
-        } else {
-            handle_client_data(events[i].data.fd);  // đọc, parse, xử lý hoặc dọn dẹp nếu disconnect
+client_t clients[MAX_CLIENTS];
+pthread_mutex_t clients_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void *client_handler(void *arg) {
+    client_t *client = (client_t *)arg;
+    char buf[4096];
+    int n;
+    
+    while ((n = recv(client->fd, buf, sizeof(buf), 0)) > 0) {
+        // Parse message (delimited by \n)
+        buf[n] = '\0';
+        
+        // Process command (login, register, msg, etc.)
+        process_input(client, buf);
+        
+        // If message, broadcast to all authenticated clients
+        if (is_chat_message(buf)) {
+            pthread_mutex_lock(&clients_mutex);
+            broadcast_message(client->username, message_text);
+            pthread_mutex_unlock(&clients_mutex);
         }
+    }
+    
+    // Client disconnected
+    pthread_mutex_lock(&clients_mutex);
+    client->fd = -1;
+    pthread_mutex_unlock(&clients_mutex);
+    return NULL;
+}
+
+int main() {
+    int listen_fd = socket(...);
+    bind(...);
+    listen(...);
+    
+    while (1) {
+        int client_fd = accept(listen_fd, ...);
+        pthread_t thread;
+        // Find empty slot in clients[] and create thread
+        pthread_create(&thread, NULL, client_handler, &clients[i]);
+        pthread_detach(thread);
     }
 }
 ```
-**Nên dùng level-triggered (mặc định của epoll, không cần `EPOLLET`)** cho bài này — đơn giản hơn nhiều so với edge-triggered (không cần vòng lặp `read` tới khi `EAGAIN`), và bài không yêu cầu hiệu năng cực cao nên không cần tối ưu bằng edge-triggered.
 
-**Xử lý buffer & framing message (quan trọng nhất khi dùng non-blocking socket):**
-- Mỗi client cần 1 buffer riêng (ví dụ `char buf[4096]` + con trỏ `len` đánh dấu đã có bao nhiêu byte) vì 1 lần `recv()` có thể nhận **chưa đủ** 1 message, hoặc nhận **nhiều hơn** 1 message cùng lúc.
-- Nếu chọn protocol dạng text kết thúc bằng `\n` (khuyến khích, dễ debug bằng `nc`/telnet): sau mỗi lần `recv()` thêm dữ liệu vào buffer, quét tìm `\n` trong buffer — tìm thấy thì tách ra xử lý 1 message, phần còn lại giữ lại buffer cho lần đọc sau; lặp lại quét vì có thể có nhiều `\n` trong 1 lần nhận.
-- `recv()` trả về `0` → client đã đóng kết nối chủ động; trả về `-1` với `errno == EAGAIN`/`EWOULDBLOCK` → chưa có dữ liệu mới (bình thường với non-blocking, không phải lỗi); trả về `-1` với `errno` khác → lỗi thật, nên đóng kết nối.
+**Cách xử lý message với blocking socket:**
+- Mỗi lần `recv()` có thể nhận chưa đủ 1 message hoặc nhiều hơn 1 message
+- Nếu dùng protocol text kết thúc `\n`: buffer incomplete messages, quét tìm `\n` để tách message
+- `recv()` trả về `0` → client đã close; `-1` → error, close connection
+- Vì dùng blocking `recv()`, mỗi thread chỉ xử lý client của nó, không cần non-blocking trickery
+
+**Synchronization với mutex:**
+```c
+// Trước khi access/modify clients[]
+pthread_mutex_lock(&clients_mutex);
+// ... critical section
+pthread_mutex_unlock(&clients_mutex);
+
+// Broadcast example
+void broadcast_message(const char *username, const char *text) {
+    pthread_mutex_lock(&clients_mutex);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i].fd >= 0 && clients[i].authenticated) {
+            send(clients[i].fd, message, len, 0);
+        }
+    }
+    pthread_mutex_unlock(&clients_mutex);
+    save_to_history(username, text);  // Save with flock
+}
+```
 
 ### Chi tiết kỹ thuật — Hash password
 
@@ -89,12 +144,12 @@ char *hashed = crypt(password, "$6$somesalt$");   // lưu chuỗi `hashed` vào 
 Nhớ link `-lcrypt` khi biên dịch.
 
 **Gợi ý thứ tự nên làm:**
-1. **Tuần 1:** viết xong khung epoll server cơ bản — chấp nhận nhiều kết nối, đọc/ghi echo đơn giản (chưa cần auth/broadcast gì), test bằng `nc` trước khi viết client riêng.
-2. **Tuần 2:** thêm đăng ký/đăng nhập + hash password (P3-M1, M6), rồi broadcast thật (P3-M2). Đây là lúc nên tự thiết kế xong protocol (mục 2 trong DESIGN.md) trước khi code tiếp.
-3. **Tuần 3:** thêm lưu & gửi lịch sử khi join (P3-M7), xử lý disconnect đột ngột sạch sẽ (P3-M4, test bằng cách `kill -9` client liên tục để soi leak fd qua `lsof`).
+1. **Tuần 1:** viết xong khung thread-per-client server cơ bản — main thread accept kết nối, spawn pthread cho mỗi client, xử lý echo đơn giản blocking I/O (chưa cần auth/broadcast gì), test bằng `nc` hoặc simple client.
+2. **Tuần 2:** thêm đăng ký/đăng nhập + hash password (P3-M1, M6), rồi broadcast thật (P3-M2) với mutex protection. Đây là lúc nên tự thiết kế xong protocol (mục 2 trong DESIGN.md) trước khi code tiếp.
+3. **Tuần 3:** thêm lưu & gửi lịch sử khi join (P3-M7), xử lý disconnect đột ngột sạch sẽ (P3-M4). Dùng `flock()` khi đọc/ghi message history, và `pthread_mutex` cho clients array.
 4. **Tuần 4:** hoàn thiện `/who` (P3-M5), viết client CLI theo đúng hành vi mẫu, viết README định nghĩa protocol, chạy đủ Test Case.
 
-**Gợi ý test thủ công khi code:** dùng `nc localhost <port>` để giả lập client thô khi debug protocol, không cần chờ viết xong client CLI hoàn chỉnh mới test được server.
+**Gợi ý test thủ công khi code:** dùng `nc localhost <port>` hoặc `telnet localhost <port>` để giả lập client thô khi debug protocol, không cần chờ viết xong client CLI hoàn chỉnh mới test được server. Test đăng ký, đăng nhập, broadcast, history trong quá trình development.
 
 ## Client CLI Behavior (mẫu tham khảo)
 
@@ -158,10 +213,10 @@ Người dùng gõ tin nhắn rồi Enter để gửi broadcast. Ngoài ra hỗ 
 ├── README.md                      # bắt buộc có mục định nghĩa Protocol
 ├── src/
 │   ├── server/
-│   │   ├── main.c                 # epoll loop chính (P3-M3)
+│   │   ├── main.c                 # thread-per-client main loop (P3-M3), accept & pthread_create
 │   │   ├── auth.c                 # đăng ký/đăng nhập, hash password (P3-M1, P3-M6)
-│   │   ├── broadcast.c            # broadcast tin nhắn (P3-M2)
-│   │   └── history.c              # lưu & gửi lịch sử tin nhắn khi join (P3-M7)
+│   │   ├── broadcast.c            # broadcast tin nhắn với mutex protection (P3-M2)
+│   │   └── history.c              # lưu & gửi lịch sử tin nhắn khi join, dùng flock (P3-M7)
 │   └── client/
 │       └── main.c                 # client CLI (theo đúng Client CLI Behavior đã định nghĩa)
 └── docs/
