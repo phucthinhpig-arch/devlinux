@@ -1,0 +1,33 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+
+# Executables
+chat-server
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+test/results/
+*.gcov
+*.gcda
+*.gcno
+
+# Documentation build
+doc/build/
+doc/_build/
+
+# Dependencies
+accounts.db
+messages.log
