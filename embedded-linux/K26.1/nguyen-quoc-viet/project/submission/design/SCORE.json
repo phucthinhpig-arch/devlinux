@@ -1,0 +1,17 @@
+{
+  "review": {
+    "score": 85,
+    "max_score": 100,
+    "verdict": "PASS",
+    "details": {
+      "architecture": 35,
+      "coverage": 30,
+      "edge_cases": 15,
+      "clarity": 5
+    }
+  },
+  "approval": {
+    "approved_by": ["test-reviewer"],
+    "timestamp": "2026-07-10T22:36:00Z"
+  }
+}
