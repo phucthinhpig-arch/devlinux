@@ -2,7 +2,7 @@ name: Auto Review Homework
 
 on:
   pull_request_target:
-    branches: [master]
+    branches: [master, feature/projects]
     types: [opened, synchronize, reopened]
 
 jobs:
@@ -22,11 +22,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           path: student-code
 
-      # 1b. Checkout master branch (để đọc class.json mới nhất từ teacher)
-      - name: Checkout base repo at master
+      # 1b. Checkout base branch (để đọc class.json mới nhất từ teacher)
+      - name: Checkout base repo at base branch
         uses: actions/checkout@v4
         with:
-          ref: master
+          ref: ${{ github.base_ref }}
           path: base-code
 
       # 1c. Add labels to PR based on branch name (dynamic, no hard-coding)
@@ -41,14 +41,20 @@ jobs:
           REPO = "${{ github.repository }}"
           TOKEN = "${{ secrets.GITHUB_TOKEN }}"
 
-          # Parse branch: subject/course/student/session-XX
-          match = re.match(r'([^/]+)/([^/]+)/', BRANCH)
-          if not match:
-              print(f"⚠️  Branch '{BRANCH}' không match format")
-              exit(0)
+          # Parse branch: either
+          #   - subject/course/student/session-XX (homework)
+          #   - subject/course/project/P{N}/student/gate (project)
 
-          subject, course = match.groups()
-          labels = [subject, course]
+          parts = BRANCH.split("/")
+          labels = []
+
+          if len(parts) >= 2:
+              subject, course = parts[0], parts[1]
+              labels = [subject, course]
+
+              # Detect type and add appropriate label
+              if len(parts) == 6 and parts[2] == "project":
+                  labels.append(f"project-{parts[3]}")  # Add P1, P2, P3, P4
 
           # Add labels via GitHub API
           headers = {
@@ -60,7 +66,7 @@ jobs:
           response = requests.post(url, headers=headers, json={"labels": labels})
 
           if response.status_code == 200:
-              print(f"✅ PR #{PR_NUMBER}: Added labels '{subject}', '{course}'")
+              print(f"✅ PR #{PR_NUMBER}: Added labels {labels}")
           else:
               print(f"❌ Failed: {response.text}")
               exit(1)

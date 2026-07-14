@@ -1,0 +1,73 @@
+name: Post-Merge Scoring
+
+on:
+  pull_request:
+    branches: [master, feature/projects]
+    types: [closed]
+
+jobs:
+  create-score:
+    name: Create SCORE.json
+    runs-on: ubuntu-latest
+
+    # Only run if PR was actually merged (not just closed)
+    if: github.event.pull_request.merged == true
+
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      # 1. Checkout student code
+      - name: Checkout student code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: student-code
+
+      # 2. Setup SSH để clone private repo
+      - name: Setup SSH Deploy Key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.REVIEWER_DEPLOY_KEY }}
+
+      # 3. Clone private repo (để lấy script create_score_json.py)
+      - name: Checkout private reviewer repo
+        run: git clone git@github.com:${{ secrets.REVIEWER_REPO }} reviewer-core
+
+      # 4. Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests --break-system-packages
+
+      # 5. Create SCORE.json with full tracking
+      - name: Create SCORE.json
+        env:
+          GH_TOKEN:          ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER:         ${{ github.event.pull_request.number }}
+          PR_REPO:           ${{ github.repository }}
+          PR_BRANCH:         ${{ github.event.pull_request.head.ref }}
+          STUDENT_CODE_PATH: student-code
+        run: python reviewer-core/scripts/create_score_json.py
+
+      # 6. Commit SCORE.json to master
+      - name: Commit SCORE.json
+        run: |
+          cd student-code
+          git config user.name "DevLinux CI"
+          git config user.email "ci@devlinux.vn"
+
+          # Check if SCORE.json was created and changed
+          if git diff --quiet; then
+            echo "✅ SCORE.json already up to date"
+          else
+            echo "📝 Committing SCORE.json..."
+            git add "**/SCORE.json"
+            git commit -m "ci: auto-generate SCORE.json after merge"
+            git push origin ${{ github.base_ref }}
+            echo "✅ SCORE.json committed and pushed"
+          fi
