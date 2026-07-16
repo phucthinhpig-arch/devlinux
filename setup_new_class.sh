@@ -1,94 +1,105 @@
 #!/bin/bash
-
-# Setup new class folder structure
-# Usage: ./setup_new_class.sh <subject> <course>
-# Example: ./setup_new_class.sh embedded-linux K26.2
+# =============================================================
+#  setup_new_class.sh — Tạo lớp học mới tự động
+# =============================================================
+#
+# CÁCH DÙNG
+#   ./setup_new_class.sh <subject> <course>
+#
+# VÍ DỤ
+#   ./setup_new_class.sh embedded-linux K26.1
+#   ./setup_new_class.sh c-basic K26.2
+#   ./setup_new_class.sh freertos K26.1
+#
+# MÔ TẢ
+#   Script tạo thư mục lớp mới với cấu trúc đầy đủ:
+#   - Thư mục: {subject}/{course}/
+#   - File class.json (template)
+#   - Thư mục homeworks/
+#
+# =============================================================
 
 set -e
 
-# Color codes
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-# Get arguments
-SUBJECT="${1:-}"
-COURSE="${2:-}"
-
-# Validate inputs
-if [ -z "$SUBJECT" ] || [ -z "$COURSE" ]; then
-    echo -e "${RED}Error: Missing arguments${NC}"
-    echo "Usage: $0 <subject> <course>"
-    echo "Example: $0 embedded-linux K26.2"
+# Kiểm tra tham số
+if [ $# -ne 2 ]; then
+    echo "❌ Usage: ./setup_new_class.sh <subject> <course>"
+    echo ""
+    echo "Subjects: embedded-linux, embedded-mcu, c-advance, c-basic, freertos"
+    echo "Example: ./setup_new_class.sh embedded-linux K26.1"
     exit 1
 fi
+
+SUBJECT=$1
+COURSE=$2
+REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 # Validate subject
-VALID_SUBJECTS=("embedded-linux" "c-advance" "c-basic" "embedded-mcu" "freertos" "rtos")
-if [[ ! " ${VALID_SUBJECTS[@]} " =~ " ${SUBJECT} " ]]; then
-    echo -e "${RED}Error: Invalid subject '${SUBJECT}'${NC}"
-    echo "Valid subjects: ${VALID_SUBJECTS[*]}"
+VALID_SUBJECTS="embedded-linux embedded-mcu c-advance c-basic freertos"
+if ! echo "$VALID_SUBJECTS" | grep -q "\b$SUBJECT\b"; then
+    echo "❌ Invalid subject: $SUBJECT"
+    echo "Valid subjects: $VALID_SUBJECTS"
     exit 1
 fi
 
-# Validate course format (K26.1, K26.2, etc.)
-if ! [[ "$COURSE" =~ ^K[0-9]+\.[0-9]+$ ]]; then
-    echo -e "${RED}Error: Invalid course format '${COURSE}'${NC}"
+# Validate course format (K##.# hoặc K##.##)
+if ! echo "$COURSE" | grep -qE "^K[0-9]{2}\.[0-9]{1,2}$"; then
+    echo "❌ Invalid course format: $COURSE"
     echo "Expected format: K26.1, K26.2, etc."
     exit 1
 fi
 
-# Set paths
-CLASS_DIR="$(dirname "$0")/${SUBJECT}/${COURSE}"
-HOMEWORKS_DIR="${CLASS_DIR}/homeworks"
+COURSE_DIR="$REPO_ROOT/$SUBJECT/$COURSE"
 
-# Check if class already exists
-if [ -d "$CLASS_DIR" ]; then
-    echo -e "${YELLOW}Warning: Class directory already exists: ${CLASS_DIR}${NC}"
-    read -p "Continue? (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Aborted."
-        exit 1
-    fi
+# Check if already exists
+if [ -d "$COURSE_DIR" ]; then
+    echo "⚠️  Course directory already exists: $COURSE_DIR"
+    exit 1
 fi
 
 # Create directories
-echo -e "${GREEN}Creating directory structure...${NC}"
-mkdir -p "$CLASS_DIR"
-mkdir -p "$HOMEWORKS_DIR"
+echo "📂 Creating $SUBJECT/$COURSE/..."
+mkdir -p "$COURSE_DIR/homeworks"
+echo "   ✅ Created directories"
 
-# Copy class.json template if it doesn't exist
-if [ ! -f "$CLASS_DIR/class.json" ]; then
-    echo -e "${GREEN}Creating class.json template...${NC}"
-    cat > "$CLASS_DIR/class.json" << 'EOF'
+# Create class.json template
+cat > "$COURSE_DIR/class.json" << 'EOF'
 {
   "sessions": 20,
   "students": {
-    "nguyen-van-a": "nguyenvana_github",
-    "tran-thi-b":   "tranthib_github",
-    "le-van-c":     "levanc_github"
+    "ten-hoc-vien-1": "github_username_1",
+    "ten-hoc-vien-2": "github_username_2"
   }
 }
 EOF
-    echo -e "${YELLOW}Note: Please update class.json with actual student data${NC}"
-else
-    echo -e "${YELLOW}class.json already exists, skipping${NC}"
-fi
+echo "   ✅ Created class.json template"
 
-# Create .gitkeep in homeworks folder
-touch "$HOMEWORKS_DIR/.gitkeep"
+# Create a sample homework file for session-01
+cat > "$COURSE_DIR/homeworks/session-01.md" << 'EOF'
+# Assignment — session-01
+
+**Deadline: 2026-07-17 23:59:00**
+
+---
+
+<!-- Giáo viên điền đề bài vào đây -->
+
+EOF
+echo "   ✅ Created homeworks/session-01.md template"
 
 echo ""
-echo -e "${GREEN}✅ Setup complete!${NC}"
+echo "======================================"
+echo "✅ Class setup complete!"
+echo "======================================"
 echo ""
-echo "Created:"
-echo "  📁 $CLASS_DIR"
-echo "  📁 $HOMEWORKS_DIR"
-echo "  📄 $CLASS_DIR/class.json (template)"
+echo "📋 Next steps:"
+echo "1. Edit $COURSE_DIR/class.json:"
+echo "   - Update student names and GitHub usernames"
+echo "   - Adjust 'sessions' if needed (default: 20)"
 echo ""
-echo -e "${YELLOW}Next steps:${NC}"
-echo "  1. Edit $CLASS_DIR/class.json with actual student data"
-echo "  2. Run: ./setup_students.sh (from devlinux root)"
+echo "2. Run setup_students.sh to create student folders:"
+echo "   bash setup_students.sh $SUBJECT $COURSE"
+echo ""
+echo "3. Edit $COURSE_DIR/homeworks/session-XX.md:"
+echo "   - Add deadline and problem statement for each session"
 echo ""
