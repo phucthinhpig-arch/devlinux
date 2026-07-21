@@ -29,7 +29,6 @@ jobs:
         with:
           ref: ${{ github.base_ref }}
           path: base-code
-          allow-unsafe-pr-checkout: true
 
       # 1c. Add labels to PR based on branch name (dynamic, no hard-coding)
       - name: Add labels to PR
