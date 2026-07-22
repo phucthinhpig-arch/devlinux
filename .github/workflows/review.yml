@@ -17,14 +17,15 @@ jobs:
     steps:
       # 1. Checkout code bài tập của học viên
       - name: Checkout student code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           path: student-code
+          allow-unsafe-pr-checkout: true
 
       # 1b. Checkout base branch (để đọc class.json mới nhất từ teacher)
       - name: Checkout base repo at base branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.base_ref }}
           path: base-code
@@ -90,6 +91,10 @@ jobs:
 
       - name: Install dependencies
         run: pip install anthropic requests --break-system-packages
+
+      # 4b. Install build tools
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential
 
       # 5. Chạy Claude Agent review
       - name: Run Review Agent

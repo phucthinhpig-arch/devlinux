@@ -1,7 +1,27 @@
 {
-  "sessions": 20,
+  "sessions": 18,
   "students": {
+    "nguyen-quoc-viet" : "quocviet1026",
     "nguyen-tran-van-thinh": "Tdieney",
-    "nguyen-quoc-viet": "quocviet1026"
+    "nguyen-hoang-minh-quoc": "MinhQuocNguyenHoang",
+    "le-nguyen-anh-thi": "none",
+    "nguyen-han-the": "Hanomind",
+    "pham-tien-trinh": "Trinhpham402",
+    "dinh-duc-chinh": "none",
+    "vu-duc-hai-son": "none",
+    "ha-vu-minh-quang": "none",
+    "nguyen-thanh-trung": "thanhtrung2303",
+    "nguyen-phu-thien": "none",
+    "nguyen-hai-long": "LongNguyen911998",
+    "pham-nguyen-ba-hoang": "none",
+    "le-ngoc-hoang": "none",
+    "ngo-doan-duy-long": "none",
+    "tran-duc-thinh": "none",
+    "pham-anh-quan": "nkaq",
+    "dinh-hai-nam": "none",
+    "trinh-dang": "none",
+    "hoang-trong-tam": "mobileguruvn",
+    "nguyen-ba-son": "none",
+    "chau-tri-duy": "none"
   }
 }
