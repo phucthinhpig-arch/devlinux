@@ -1,6 +1,14 @@
 {
   "projects": {
-    "nguyen-quoc-viet": "P3"
+    "nguyen-quoc-viet": "P3",
+    "pham-tien-trinh": "P2",
+    "le-phuc-tai": "P2",
+    "pham-dac-tam": "P4",
+    "pham-anh-quan": "P3",
+    "bui-quang-huy": "P3",
+    "pham-quang-dung": "P3",
+    "le-hoang-giang": "P1",
+    "truong-nguyen-minh-dang": "P4"
   },
   "reviewers": ["DevLinux-vn"]
 }
