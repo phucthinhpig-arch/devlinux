@@ -1,0 +1,10 @@
+(gdb) run
+Program received signal SIGSEGV, Segmentation fault.
+__memmove_avx_unaligned_erms () at ../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:412
+(gdb) bt
+#0  __memmove_avx_unaligned_erms ()
+#1  0x00005555555551c9 in parse_packet (raw_data=...) at main.c:23
+#2  0x000055555555521b in main () at main.c:30
+(gdb) frame 1
+(gdb) print pkt.length
+$1 = 200

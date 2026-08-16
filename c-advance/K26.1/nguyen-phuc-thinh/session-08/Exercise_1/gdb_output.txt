@@ -1,0 +1,8 @@
+(gdb) break main.c:13
+(gdb) run
+Enter admin password: AAAAAAAAAAAAA
+Breakpoint 1, main () at main.c:13
+(gdb) print password
+$1 = "AAAAAAAAAAAAA"
+(gdb) print is_admin
+$2 = true
