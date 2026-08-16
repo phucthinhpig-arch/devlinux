@@ -8,7 +8,8 @@
     "bui-quang-huy": "P3",
     "pham-quang-dung": "P3",
     "le-hoang-giang": "P1",
-    "truong-nguyen-minh-dang": "P4"
+    "truong-nguyen-minh-dang": "P4",
+    "nguyen-hai-long" : "P2"
   },
   "reviewers": ["DevLinux-vn"]
 }

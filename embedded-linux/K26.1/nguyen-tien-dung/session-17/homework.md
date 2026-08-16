@@ -3,7 +3,7 @@
 
 ---
 
-## Exercise_1 [build]
+## Exercise_1 [review-only]
 
 ### Problem Statement
 
