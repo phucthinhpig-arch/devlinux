@@ -8,9 +8,9 @@
 #        bash setup_students.sh
 #
 #   2. Setup 1 lớp cụ thể:
-#        bash setup_students.sh <subject> <course>
-#        bash setup_students.sh c-basic K26.2
-#        bash setup_students.sh embedded-linux K26.1
+#        bash setup_students.sh <subject/course>
+#        bash setup_students.sh c-basic/K26.2
+#        bash setup_students.sh embedded-linux/K26.1
 #
 # MÔ TẢ
 #   Script tự động tìm tất cả file class.json trong repo
@@ -62,11 +62,28 @@
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
-SUBJECT="${1:-}"
-COURSE="${2:-}"
+COURSE_ARG="${1:-}"
 CREATED=0
 SKIPPED=0
 ERRORS=0
+
+# Parse subject/course if provided
+SUBJECT=""
+COURSE=""
+if [ -n "$COURSE_ARG" ]; then
+    if ! echo "$COURSE_ARG" | grep -q "/"; then
+        echo "❌ Invalid format: $COURSE_ARG"
+        echo "Expected format: subject/course (e.g., embedded-linux/K26.1)"
+        echo ""
+        echo "Usage:"
+        echo "  Setup all classes:    bash setup_students.sh"
+        echo "  Setup single class:   bash setup_students.sh subject/course"
+        echo "                        bash setup_students.sh embedded-linux/K26.1"
+        exit 1
+    fi
+    SUBJECT=$(echo "$COURSE_ARG" | cut -d'/' -f1)
+    COURSE=$(echo "$COURSE_ARG" | cut -d'/' -f2)
+fi
 
 echo "======================================"
 echo "  DevLinux — Setup Student Folders"

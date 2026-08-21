@@ -4,12 +4,12 @@
 # =============================================================
 #
 # CÁCH DÙNG
-#   ./setup_new_class.sh <subject> <course>
+#   ./setup_new_class.sh <subject/course>
 #
 # VÍ DỤ
-#   ./setup_new_class.sh embedded-linux K26.1
-#   ./setup_new_class.sh c-basic K26.2
-#   ./setup_new_class.sh freertos K26.1
+#   ./setup_new_class.sh embedded-linux/K26.1
+#   ./setup_new_class.sh c-basic/K26.2
+#   ./setup_new_class.sh freertos/K26.1
 #
 # MÔ TẢ
 #   Script tạo thư mục lớp mới với cấu trúc đầy đủ:
@@ -22,16 +22,24 @@
 set -e
 
 # Kiểm tra tham số
-if [ $# -ne 2 ]; then
-    echo "❌ Usage: ./setup_new_class.sh <subject> <course>"
+if [ $# -ne 1 ]; then
+    echo "❌ Usage: ./setup_new_class.sh <subject/course>"
     echo ""
     echo "Subjects: embedded-linux, embedded-mcu, c-advance, c-basic, freertos"
-    echo "Example: ./setup_new_class.sh embedded-linux K26.1"
+    echo "Example: ./setup_new_class.sh embedded-linux/K26.1"
     exit 1
 fi
 
-SUBJECT=$1
-COURSE=$2
+# Parse subject/course
+COURSE_ARG="$1"
+if ! echo "$COURSE_ARG" | grep -q "/"; then
+    echo "❌ Invalid format: $COURSE_ARG"
+    echo "Expected format: subject/course (e.g., embedded-linux/K26.1)"
+    exit 1
+fi
+
+SUBJECT=$(echo "$COURSE_ARG" | cut -d'/' -f1)
+COURSE=$(echo "$COURSE_ARG" | cut -d'/' -f2)
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 # Validate subject
@@ -98,7 +106,7 @@ echo "   - Update student names and GitHub usernames"
 echo "   - Adjust 'sessions' if needed (default: 20)"
 echo ""
 echo "2. Run setup_students.sh to create student folders:"
-echo "   bash setup_students.sh $SUBJECT $COURSE"
+echo "   bash setup_students.sh $SUBJECT/$COURSE"
 echo ""
 echo "3. Edit $COURSE_DIR/homeworks/session-XX.md:"
 echo "   - Add deadline and problem statement for each session"
