@@ -19,7 +19,7 @@ The driver must support:
   - If the command is invalid → log an error via `printk` and return `-EINVAL`
 - **open()** / **release()**: log via `printk` on every call (same as `hello_chardev`).
 
-The driver must follow the same lifecycle you learned in `hello_chardev.c`:
+The driver must follow the same lifecycle you learned in `hello_chardev.c` and `temp_sensor.c` from class:
 `alloc_chrdev_region()` → `cdev_init()` + `cdev_add()` → `class_create()` → `device_create()`, and clean up in the reverse order inside `module_exit`.
 
 > Note: this is an extension exercise built on top of `hello_chardev.c` and `temp_sensor.c` from class — **do not copy the sample driver as-is**; you must write your own read/write logic for the counter.
