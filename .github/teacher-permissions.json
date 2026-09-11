@@ -7,6 +7,9 @@
     "teacher-username-2": {
       "embedded-mcu": ["K26.1", "K26.2"],
       "c-advance": ["K26.1"]
+    },
+    "Tdieney": {
+      "c-advance": ["K26.2"]
     }
   }
 }

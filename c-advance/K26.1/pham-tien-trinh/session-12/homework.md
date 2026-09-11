@@ -1,4 +1,4 @@
-> **📣 Message from your instructor:**
+session-01.md> **📣 Message from your instructor:**
 >
 > Hi folks,
 >
