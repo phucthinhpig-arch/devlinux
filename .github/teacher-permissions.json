@@ -9,7 +9,7 @@
       "c-advance": ["K26.1"]
     },
     "Tdieney": {
-      "c-advance": ["K26.2"]
+      "embedded-mcu": ["K26.2"]
     }
   }
 }
