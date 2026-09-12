@@ -83,11 +83,9 @@ cp homework.template.md embedded-linux/K26.1/homeworks/session-10.md
 
 **Mở file session-10.md và chỉnh:**
 
-```markdown
+```
 # Assignment — session-10
 **Deadline: 2026-06-14 23:59:00**
-
-> ⚠️ Xóa tất cả dòng hướng dẫn (bắt đầu bằng `>`) trước khi push
 
 ---
 
@@ -100,34 +98,26 @@ Viết chương trình C tính...
 ### Design Hints (optional)
 
 Gợi ý struct:
-```c
 typedef struct {
     int value;
 } my_t;
-```
 
 ### Suggested Approach (optional)
 
-```
 1. Đọc input
 2. Xử lý dữ liệu
 3. In kết quả
-```
 
 ### Expected Output (optional)
 
 Khi chạy với input `5`, output:
-```
 Result: 5
-```
 
 ### Submission
 
-```
 Exercise_1/
 ├── main.c
 └── Makefile
-```
 
 ---
 
@@ -139,11 +129,9 @@ Exercise_1/
 
 ### Submission
 
-```
 Exercise_2/
 ├── main.c
 └── Makefile
-```
 ```
 
 **Giải thích các phần:**
@@ -161,15 +149,15 @@ Exercise_2/
 ### Bước 3: Xóa tất cả dòng `>` (hướng dẫn template)
 
 **Trước (template):**
-```markdown
-> Tag `[build]`: the system will compile and run the program
+```
+> Tag [build]: the system will compile and run the program
 > Describe the exercise requirements. Be as specific as possible.
 
 Write a C program that ...
 ```
 
 **Sau (khi sửa xong):**
-```markdown
+```
 Write a C program that ...
 ```
 
@@ -318,6 +306,9 @@ Học viên sẽ tự động thấy bài tập mới khi pull từ master.
 
 | Vấn đề | Nguyên nhân | Fix |
 |---|---|---|
+| **PR bị reject: Line 2 must have deadline** | Dòng 2 không có deadline hoặc format sai | Kiểm tra dòng 2: `**Deadline: YYYY-MM-DD HH:MM:SS**` (strict format) |
+| **PR bị reject: Found template instruction lines** | Quên xóa dòng bắt đầu với `>` | Xóa tất cả dòng hướng dẫn (bắt đầu bằng `>`) |
+| **PR bị reject: Exercise missing tag** | Exercise không có `[build]` hoặc `[review-only]` | Thêm tag: `## Exercise_1 [build]` hoặc `## Exercise_1 [review-only]` |
 | **Deadline không được update** | Deadline format sai | Kiểm tra: `**Deadline: YYYY-MM-DD HH:MM:SS**` (đúng format) |
 | **PR bị reject: invalid branch name** | Tên branch sai format | Tạo branch mới: `{subject}/{course}/homework` |
 | **PR bị reject: no permission** | Không được quyền edit course | Contact admin → thêm vào teacher-permissions.json |
@@ -330,10 +321,13 @@ Học viên sẽ tự động thấy bài tập mới khi pull từ master.
 
 ## 📌 **Checklist Trước Khi Push**
 
-- [ ] Dòng 2 có deadline: `**Deadline: YYYY-MM-DD HH:MM:SS**`
-- [ ] Format deadline đúng (kiểm tra: năm-tháng-ngày giờ:phút:giây)
-- [ ] Không có dòng `>` (xóa tất cả instructions)
-- [ ] Các Exercise có tag `[build]` hoặc `[review-only]`
+### ⚠️ **CRITICAL — GitHub Actions sẽ reject nếu không đúng:**
+- [ ] ✅ Dòng 2 **phải** có: `**Deadline: YYYY-MM-DD HH:MM:SS**` (strict format, không thay đổi)
+- [ ] ✅ **Không có** dòng `>` (xóa tất cả template instructions)
+- [ ] ✅ **Mỗi** Exercise có tag: `[build]` hoặc `[review-only]`
+
+### ⚡ **IMPORTANT — Khác:**
+- [ ] Format deadline đúng: YYYY-MM-DD HH:MM:SS (năm-tháng-ngày giờ:phút:giây)
 - [ ] Problem Statement rõ ràng
 - [ ] Submission section có cấu trúc folder
 - [ ] Branch name đúng: `{subject}/{course}/homework`

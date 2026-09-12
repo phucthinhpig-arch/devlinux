@@ -1,7 +1,7 @@
 name: Distribute Homework
 
 on:
-  pull_request:
+  pull_request_target:
     branches: [master]
     paths:
       - "*/*/homeworks/**"
@@ -181,10 +181,78 @@ jobs:
 
           echo "is_valid=$IS_VALID" >> $GITHUB_OUTPUT
 
+      # Step 8b: Validate homework file format
+      - name: Validate homework file format
+        id: validate_homework_format
+        if: steps.validate_files.outputs.is_valid == 'true'
+        run: |
+          SUBJECT="${{ steps.branch_info.outputs.subject }}"
+          COURSE="${{ steps.branch_info.outputs.course }}"
+          HOMEWORK_DIR="${SUBJECT}/${COURSE}/homeworks"
+
+          echo "Validating homework files in: $HOMEWORK_DIR"
+          echo ""
+
+          VALIDATION_PASSED="true"
+
+          # Validate each session-*.md file
+          for hw_file in "$HOMEWORK_DIR"/session-*.md; do
+            if [ ! -f "$hw_file" ]; then
+              continue
+            fi
+
+            filename=$(basename "$hw_file")
+            echo "📄 Checking: $filename"
+
+            # 1. Check line 2 has deadline in correct format
+            line2=$(sed -n '2p' "$hw_file")
+            if ! echo "$line2" | grep -qE '^\*\*Deadline: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\*\*'; then
+              echo "  ❌ Line 2 must have deadline: \`**Deadline: YYYY-MM-DD HH:MM:SS**\`"
+              echo "     Current: $line2"
+              VALIDATION_PASSED="false"
+            else
+              echo "  ✅ Deadline format correct"
+            fi
+
+            # 2. Check no template instruction lines (starting with >)
+            if grep -q "^[[:space:]]*>" "$hw_file"; then
+              echo "  ❌ Found template instruction lines (starting with >). Remove all lines like this:"
+              grep "^[[:space:]]*>" "$hw_file" | head -3
+              VALIDATION_PASSED="false"
+            else
+              echo "  ✅ No template instructions found"
+            fi
+
+            # 3. Check all exercises have [build] or [review-only] tag
+            exercise_headers=$(grep "^## Exercise" "$hw_file")
+            if [ -n "$exercise_headers" ]; then
+              while IFS= read -r header; do
+                if ! echo "$header" | grep -qE "\[(build|review-only)\]"; then
+                  echo "  ❌ Exercise missing tag: $header"
+                  echo "     Must have [build] or [review-only] tag"
+                  VALIDATION_PASSED="false"
+                fi
+              done <<< "$exercise_headers"
+              if echo "$exercise_headers" | grep -qE "\[(build|review-only)\]"; then
+                echo "  ✅ All exercises have proper tags"
+              fi
+            fi
+
+            echo ""
+          done
+
+          if [ "$VALIDATION_PASSED" = "true" ]; then
+            echo "✅ All homework files passed validation"
+            echo "is_valid_format=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Homework file validation failed"
+            echo "is_valid_format=false" >> $GITHUB_OUTPUT
+          fi
+
       # Step 9: Check for symlinks
       - name: Check for symlinks
         id: check_symlinks
-        if: steps.validate_files.outputs.is_valid == 'true'
+        if: steps.validate_homework_format.outputs.is_valid_format == 'true'
         run: |
           SUBJECT="${{ steps.branch_info.outputs.subject }}"
           COURSE="${{ steps.branch_info.outputs.course }}"
@@ -234,6 +302,7 @@ jobs:
           steps.validate_author.outputs.is_teacher != 'true' ||
           steps.validate_permission.outputs.has_permission != 'true' ||
           steps.validate_files.outputs.is_valid != 'true' ||
+          steps.validate_homework_format.outputs.is_valid_format != 'true' ||
           steps.check_symlinks.outputs.has_symlinks == 'true' ||
           steps.check_conflict.outputs.has_conflict == 'true'
         run: |
@@ -252,6 +321,14 @@ jobs:
             echo "❌ Error: Files must be in ${{ steps.branch_info.outputs.subject }}/${{ steps.branch_info.outputs.course }}/homeworks/"
           fi
 
+          if [ "${{ steps.validate_homework_format.outputs.is_valid_format }}" != "true" ]; then
+            echo "❌ Error: Homework file format validation failed"
+            echo "   - Line 2 must have deadline: \`**Deadline: YYYY-MM-DD HH:MM:SS**\`"
+            echo "   - Remove all template instruction lines (starting with \`>\`)"
+            echo "   - All Exercises must have [\`build\`] or [\`review-only\`] tag"
+            echo "   Check the workflow log for details"
+          fi
+
           if [ "${{ steps.check_symlinks.outputs.has_symlinks }}" = "true" ]; then
             echo "❌ Error: Symlinks not allowed"
           fi
@@ -264,7 +341,7 @@ jobs:
 
       # Step 12: Auto-approve PR
       - name: Auto-approve PR
-        if: steps.check_conflict.outputs.has_conflict == 'false'
+        if: steps.validate_homework_format.outputs.is_valid_format == 'true' && steps.check_conflict.outputs.has_conflict == 'false'
         uses: actions/github-script@v7
         with:
           script: |
@@ -278,7 +355,7 @@ jobs:
 
       # Step 13: Run distribute script
       - name: Run distribute homework
-        if: steps.check_conflict.outputs.has_conflict == 'false'
+        if: steps.validate_homework_format.outputs.is_valid_format == 'true' && steps.check_conflict.outputs.has_conflict == 'false'
         run: |
           SUBJECT="${{ steps.branch_info.outputs.subject }}"
           COURSE="${{ steps.branch_info.outputs.course }}"
@@ -289,9 +366,31 @@ jobs:
 
           echo "✅ Homework distributed successfully"
 
+      # Step 13b: Commit and push distributed files
+      - name: Commit distributed files
+        if: steps.validate_homework_format.outputs.is_valid_format == 'true' && steps.check_conflict.outputs.has_conflict == 'false'
+        run: |
+          SUBJECT="${{ steps.branch_info.outputs.subject }}"
+          COURSE="${{ steps.branch_info.outputs.course }}"
+          COURSE_ARG="${SUBJECT}/${COURSE}"
+
+          git config user.email "devlinux-bot@devlinux.vn"
+          git config user.name "DevLinux Bot"
+
+          # Check if there are any changes to commit
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Committing distributed files..."
+            git add .
+            git commit -m "homework: distribute $COURSE_ARG to all students"
+            git push origin master
+            echo "✅ Distributed files committed and pushed"
+          else
+            echo "ℹ️  No changes to commit"
+          fi
+
       # Step 14: Auto-merge PR
       - name: Auto-merge PR
-        if: steps.check_conflict.outputs.has_conflict == 'false'
+        if: steps.validate_homework_format.outputs.is_valid_format == 'true' && steps.check_conflict.outputs.has_conflict == 'false'
         uses: actions/github-script@v7
         with:
           script: |
@@ -305,7 +404,7 @@ jobs:
 
       # Step 15: Comment success
       - name: Comment success
-        if: steps.check_conflict.outputs.has_conflict == 'false'
+        if: steps.validate_homework_format.outputs.is_valid_format == 'true' && steps.check_conflict.outputs.has_conflict == 'false'
         uses: actions/github-script@v7
         with:
           script: |
@@ -324,6 +423,7 @@ jobs:
 - ✅ Author verified
 - ✅ Permissions validated
 - ✅ Files validated
+- ✅ Homework format validated (deadline, tags, no template instructions)
 - ✅ No conflicts
 - ✅ Homework distributed to all students
 - ✅ PR merged
