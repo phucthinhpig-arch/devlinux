@@ -146,7 +146,9 @@ Exercise_2/
 | **Expected Output** | ❌ | Output mong đợi (optional, xóa nếu chỉ review) |
 | **Submission** | ✅ | Cấu trúc folder cần nộp |
 
-### Bước 3: Xóa tất cả dòng `>` (hướng dẫn template)
+### Bước 3: (Khuyến nghị) Dọn dẹp dòng hướng dẫn mẫu
+
+File template có sẵn vài dòng gợi ý bắt đầu bằng `>` để hướng dẫn cách điền nội dung — nên xóa cho đề bài gọn gàng, nhưng **không bắt buộc**: hệ thống không reject nếu bạn giữ lại, vì `>` cũng là cú pháp Markdown hợp lệ (blockquote) mà bạn có thể dùng để viết gợi ý/ghi chú thật trong đề bài.
 
 **Trước (template):**
 ```
@@ -156,7 +158,7 @@ Exercise_2/
 Write a C program that ...
 ```
 
-**Sau (khi sửa xong):**
+**Sau (khi dọn xong, không bắt buộc):**
 ```
 Write a C program that ...
 ```
@@ -181,7 +183,6 @@ cat embedded-linux/K26.1/homeworks/session-10.md
 
 Kiểm tra:
 - ✅ Deadline ở dòng 2, format đúng
-- ✅ Không có dòng `>` (instructions)
 - ✅ Các Exercise đều có `[build]` hoặc `[review-only]`
 - ✅ Submission section rõ ràng
 
@@ -307,14 +308,12 @@ Học viên sẽ tự động thấy bài tập mới khi pull từ master.
 | Vấn đề | Nguyên nhân | Fix |
 |---|---|---|
 | **PR bị reject: Line 2 must have deadline** | Dòng 2 không có deadline hoặc format sai | Kiểm tra dòng 2: `**Deadline: YYYY-MM-DD HH:MM:SS**` (strict format) |
-| **PR bị reject: Found template instruction lines** | Quên xóa dòng bắt đầu với `>` | Xóa tất cả dòng hướng dẫn (bắt đầu bằng `>`) |
 | **PR bị reject: Exercise missing tag** | Exercise không có `[build]` hoặc `[review-only]` | Thêm tag: `## Exercise_1 [build]` hoặc `## Exercise_1 [review-only]` |
 | **Deadline không được update** | Deadline format sai | Kiểm tra: `**Deadline: YYYY-MM-DD HH:MM:SS**` (đúng format) |
 | **PR bị reject: invalid branch name** | Tên branch sai format | Tạo branch mới: `{subject}/{course}/homework` |
 | **PR bị reject: no permission** | Không được quyền edit course | Contact admin → thêm vào teacher-permissions.json |
 | **PR bị reject: files not in homeworks/** | Edit file ngoài homeworks/ | Chỉ edit file trong `{subject}/{course}/homeworks/` |
-| **Template hướng dẫn vẫn có trong file** | Quên xóa dòng `>` | Xóa tất cả dòng bắt đầu với `>` |
-| **Học viên không thấy bài tập** | PR chưa merge | Kiểm tra PR status, chờ auto-merge hoàn tất |
+| **Học viên không thấy bài tập** | PR chưa merge, hoặc workflow distribute-after-merge chưa chạy xong | Kiểm tra PR status; sau khi merge, đợi vài giây rồi kiểm tra Actions tab |
 | **Exercise không compile** | Makefile hoặc code lỗi | Kiểm tra Exercise có tag `[build]` không, Makefile đúng không |
 
 ---
@@ -323,7 +322,6 @@ Học viên sẽ tự động thấy bài tập mới khi pull từ master.
 
 ### ⚠️ **CRITICAL — GitHub Actions sẽ reject nếu không đúng:**
 - [ ] ✅ Dòng 2 **phải** có: `**Deadline: YYYY-MM-DD HH:MM:SS**` (strict format, không thay đổi)
-- [ ] ✅ **Không có** dòng `>` (xóa tất cả template instructions)
 - [ ] ✅ **Mỗi** Exercise có tag: `[build]` hoặc `[review-only]`
 
 ### ⚡ **IMPORTANT — Khác:**

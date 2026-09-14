@@ -1,8 +1,9 @@
-name: Distribute Homework
+name: Validate & Merge Homework PR
 
 on:
   pull_request_target:
     branches: [master]
+    types: [opened, synchronize, reopened]
     paths:
       - "*/*/homeworks/**"
 
@@ -17,10 +18,16 @@ jobs:
 
     steps:
       # Step 1: Checkout code
+      # allow-unsafe-pr-checkout is required to check out a fork's PR head under
+      # pull_request_target. Safe here because this workflow never executes any
+      # code from the PR - it only reads .md files with grep/sed for validation,
+      # and permission checks (Steps 5-6) run before anything else happens.
       - name: Checkout code
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          allow-unsafe-pr-checkout: true
 
       # Step 2: Extract branch name
       - name: Extract branch info
@@ -62,7 +69,7 @@ jobs:
       - name: Load teacher permissions
         id: permissions
         run: |
-          PERMISSIONS=$(cat .github/teacher-permissions.json)
+          PERMISSIONS=$(git show origin/master:.github/teacher-permissions.json | jq -c .)
           echo "permissions=$PERMISSIONS" >> $GITHUB_OUTPUT
 
       # Step 5: Validate PR author
@@ -141,8 +148,7 @@ jobs:
       - name: Get changed files
         id: changed_files
         run: |
-          git fetch origin master:master
-          CHANGED=$(git diff --name-only master...HEAD)
+          CHANGED=$(git diff --name-only origin/master...HEAD)
 
           echo "Changed files:"
           echo "$CHANGED"
@@ -189,17 +195,22 @@ jobs:
           SUBJECT="${{ steps.branch_info.outputs.subject }}"
           COURSE="${{ steps.branch_info.outputs.course }}"
           HOMEWORK_DIR="${SUBJECT}/${COURSE}/homeworks"
+          CHANGED_FILES="${{ steps.changed_files.outputs.files }}"
 
-          echo "Validating homework files in: $HOMEWORK_DIR"
+          echo "Validating only the homework files changed in this PR"
           echo ""
 
           VALIDATION_PASSED="true"
 
-          # Validate each session-*.md file
-          for hw_file in "$HOMEWORK_DIR"/session-*.md; do
-            if [ ! -f "$hw_file" ]; then
-              continue
-            fi
+          # Only validate session-*.md files that this PR actually touched
+          # (not every file already in homeworks/, which may predate these rules)
+          while IFS= read -r hw_file; do
+            [ -z "$hw_file" ] && continue
+            case "$hw_file" in
+              "$HOMEWORK_DIR"/session-*.md) ;;
+              *) continue ;;
+            esac
+            [ -f "$hw_file" ] || continue
 
             filename=$(basename "$hw_file")
             echo "📄 Checking: $filename"
@@ -214,16 +225,7 @@ jobs:
               echo "  ✅ Deadline format correct"
             fi
 
-            # 2. Check no template instruction lines (starting with >)
-            if grep -q "^[[:space:]]*>" "$hw_file"; then
-              echo "  ❌ Found template instruction lines (starting with >). Remove all lines like this:"
-              grep "^[[:space:]]*>" "$hw_file" | head -3
-              VALIDATION_PASSED="false"
-            else
-              echo "  ✅ No template instructions found"
-            fi
-
-            # 3. Check all exercises have [build] or [review-only] tag
+            # 2. Check all exercises have [build] or [review-only] tag
             exercise_headers=$(grep "^## Exercise" "$hw_file")
             if [ -n "$exercise_headers" ]; then
               while IFS= read -r header; do
@@ -239,7 +241,7 @@ jobs:
             fi
 
             echo ""
-          done
+          done <<< "$CHANGED_FILES"
 
           if [ "$VALIDATION_PASSED" = "true" ]; then
             echo "✅ All homework files passed validation"
@@ -275,27 +277,6 @@ jobs:
             echo "has_symlinks=true" >> $GITHUB_OUTPUT
           fi
 
-      # Step 10: Check merge conflict
-      - name: Check merge conflict
-        id: check_conflict
-        if: steps.check_symlinks.outputs.has_symlinks == 'false'
-        run: |
-          git config user.email "bot@devlinux.vn"
-          git config user.name "DevLinux Bot"
-
-          git fetch origin master:master
-
-          # Test merge without committing
-          if git merge --no-commit --no-ff master 2>&1 | grep -q "CONFLICT"; then
-            echo "❌ Merge conflict detected"
-            git merge --abort
-            echo "has_conflict=true" >> $GITHUB_OUTPUT
-          else
-            echo "✅ No merge conflict"
-            git merge --abort
-            echo "has_conflict=false" >> $GITHUB_OUTPUT
-          fi
-
       # Step 11: Reject if any validation failed
       - name: Reject PR if validation failed
         if: |
@@ -303,8 +284,7 @@ jobs:
           steps.validate_permission.outputs.has_permission != 'true' ||
           steps.validate_files.outputs.is_valid != 'true' ||
           steps.validate_homework_format.outputs.is_valid_format != 'true' ||
-          steps.check_symlinks.outputs.has_symlinks == 'true' ||
-          steps.check_conflict.outputs.has_conflict == 'true'
+          steps.check_symlinks.outputs.has_symlinks == 'true'
         run: |
           echo "❌ PR Validation Failed"
           echo ""
@@ -324,7 +304,6 @@ jobs:
           if [ "${{ steps.validate_homework_format.outputs.is_valid_format }}" != "true" ]; then
             echo "❌ Error: Homework file format validation failed"
             echo "   - Line 2 must have deadline: \`**Deadline: YYYY-MM-DD HH:MM:SS**\`"
-            echo "   - Remove all template instruction lines (starting with \`>\`)"
             echo "   - All Exercises must have [\`build\`] or [\`review-only\`] tag"
             echo "   Check the workflow log for details"
           fi
@@ -333,68 +312,16 @@ jobs:
             echo "❌ Error: Symlinks not allowed"
           fi
 
-          if [ "${{ steps.check_conflict.outputs.has_conflict }}" = "true" ]; then
-            echo "❌ Error: Merge conflict detected. Please rebase your branch"
-          fi
-
           exit 1
 
-      # Step 12: Auto-approve PR
-      - name: Auto-approve PR
-        if: steps.validate_homework_format.outputs.is_valid_format == 'true' && steps.check_conflict.outputs.has_conflict == 'false'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.pulls.createReview({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.issue.number,
-              event: 'APPROVE'
-            })
-            console.log('✅ PR auto-approved')
-
-      # Step 13: Run distribute script
-      - name: Run distribute homework
-        if: steps.validate_homework_format.outputs.is_valid_format == 'true' && steps.check_conflict.outputs.has_conflict == 'false'
-        run: |
-          SUBJECT="${{ steps.branch_info.outputs.subject }}"
-          COURSE="${{ steps.branch_info.outputs.course }}"
-          COURSE_ARG="${SUBJECT}/${COURSE}"
-
-          echo "Running: bash distribute_homework.sh $COURSE_ARG"
-          bash distribute_homework.sh "$COURSE_ARG"
-
-          echo "✅ Homework distributed successfully"
-
-      # Step 13b: Commit and push distributed files
-      - name: Commit distributed files
-        if: steps.validate_homework_format.outputs.is_valid_format == 'true' && steps.check_conflict.outputs.has_conflict == 'false'
-        run: |
-          SUBJECT="${{ steps.branch_info.outputs.subject }}"
-          COURSE="${{ steps.branch_info.outputs.course }}"
-          COURSE_ARG="${SUBJECT}/${COURSE}"
-
-          git config user.email "devlinux-bot@devlinux.vn"
-          git config user.name "DevLinux Bot"
-
-          # Check if there are any changes to commit
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "Committing distributed files..."
-            git add .
-            git commit -m "homework: distribute $COURSE_ARG to all students"
-            git push origin master
-            echo "✅ Distributed files committed and pushed"
-          else
-            echo "ℹ️  No changes to commit"
-          fi
-
-      # Step 14: Auto-merge PR
+      # Step 14: Auto-merge PR (GitHub rejects this automatically if there's a real
+      # merge conflict, which fails the step and triggers the failure comment below)
       - name: Auto-merge PR
-        if: steps.validate_homework_format.outputs.is_valid_format == 'true' && steps.check_conflict.outputs.has_conflict == 'false'
+        if: steps.validate_homework_format.outputs.is_valid_format == 'true'
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.pulls.merge({
+            await github.rest.pulls.merge({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number,
@@ -404,7 +331,7 @@ jobs:
 
       # Step 15: Comment success
       - name: Comment success
-        if: steps.validate_homework_format.outputs.is_valid_format == 'true' && steps.check_conflict.outputs.has_conflict == 'false'
+        if: steps.validate_homework_format.outputs.is_valid_format == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -415,20 +342,19 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `✅ **Homework Distribution Successful**
+              body: `✅ **Homework PR Merged**
 
-**Course:** ${subject}/${course}
+            **Course:** ${subject}/${course}
 
-**Actions completed:**
-- ✅ Author verified
-- ✅ Permissions validated
-- ✅ Files validated
-- ✅ Homework format validated (deadline, tags, no template instructions)
-- ✅ No conflicts
-- ✅ Homework distributed to all students
-- ✅ PR merged
+            **Actions completed:**
+            - ✅ Author verified
+            - ✅ Permissions validated
+            - ✅ Files validated
+            - ✅ Homework format validated (deadline, tags)
+            - ✅ No symlinks
+            - ✅ PR merged into master
 
-The homework has been automatically distributed to all students in the class.`
+            Distribution to all students will run automatically in a separate workflow now that master has been updated.`
             })
 
       # Step 16: Comment failure
@@ -441,16 +367,16 @@ The homework has been automatically distributed to all students in the class.`
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `❌ **Homework Distribution Failed**
+              body: `❌ **Homework PR Rejected**
 
-**Validation Requirements:**
-- ✅ Branch name must be: \`{subject}/{course}/homework\`
-  - Example: \`c-advance/K26.1/homework\`
-- ✅ Only author in the teacher whitelist can submit
-- ✅ Author must have permission to edit the specified course
-- ✅ Only files in \`{subject}/{course}/homeworks/\` can be modified
-- ✅ No symlinks allowed
-- ✅ No merge conflicts
+            **Validation Requirements:**
+            - ✅ Branch name must be: \`{subject}/{course}/homework\`
+              - Example: \`c-advance/K26.1/homework\`
+            - ✅ Only author in the teacher whitelist can submit
+            - ✅ Author must have permission to edit the specified course
+            - ✅ Only files in \`{subject}/{course}/homeworks/\` can be modified
+            - ✅ No symlinks allowed
+            - ✅ Must be mergeable into master with no conflicts
 
-**Please check the workflow logs for details.**`
+            **Please check the workflow logs for details.**`
             })

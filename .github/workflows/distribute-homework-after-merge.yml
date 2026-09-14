@@ -1,0 +1,75 @@
+name: Distribute Homework After Merge
+
+# Runs AFTER a homework PR has already been merged into master (by
+# distribute-homework.yml). Checks out master directly (a real branch, not a
+# PR/fork SHA), so there is no detached-HEAD / fast-forward complexity here —
+# just read the new files and copy them out to students.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "*/*/homeworks/**"
+
+permissions:
+  contents: write
+
+jobs:
+  distribute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      # Step 1: Checkout master normally
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # Step 2: Find which subject/course homeworks changed in this push
+      - name: Find changed courses
+        id: find_courses
+        run: |
+          CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }})
+
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          COURSES=$(echo "$CHANGED" | grep -oE '^[^/]+/[^/]+/homeworks/' | sed 's#/homeworks/##' | sort -u)
+
+          echo ""
+          echo "Courses to distribute:"
+          echo "$COURSES"
+
+          echo "courses<<EOF" >> $GITHUB_OUTPUT
+          echo "$COURSES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # Step 3: Run distribute_homework.sh for each affected course
+      - name: Distribute homework to students
+        if: steps.find_courses.outputs.courses != ''
+        run: |
+          COURSES="${{ steps.find_courses.outputs.courses }}"
+
+          while IFS= read -r course; do
+            [ -z "$course" ] && continue
+            echo "=== Distributing: $course ==="
+            bash distribute_homework.sh "$course"
+          done <<< "$COURSES"
+
+      # Step 4: Commit and push the distributed homework.md files
+      - name: Commit distributed files
+        if: steps.find_courses.outputs.courses != ''
+        run: |
+          git config user.email "devlinux-bot@devlinux.vn"
+          git config user.name "DevLinux Bot"
+
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Committing distributed files..."
+            git add .
+            git commit -m "homework: auto-distribute updated homework to students"
+            git push origin master
+            echo "✅ Distributed files committed and pushed"
+          else
+            echo "ℹ️  No changes to commit"
+          fi
