@@ -1,520 +1,143 @@
-> **📣 Message from your instructor:**
->
-> Hi folks,
->
-> This advanced C programming course recommends young engineers to code on your own!
-> If possible, let's first try to write code from scratch. If it's hard, you guys can
-> ask AI coding tool assistant! Don't let AI agent generate code for you!!
->
-> Happy coding geeks! 🚀
+# Assignment — Session: 07
+**Deadline: 2026-09-13 23:59:00**
 
 ---
 
-# Assignment — Session 07: Macros, Variadic Functions & Logging
-**Deadline: 2026-08-09 23:59:00**
-
----
-
-## Overview
-
-This homework covers the five major topics from Lecture 7:
-
-| Exercise | Topic | Difficulty |
-|:---|:---|:---:|
-| Exercise_1 | Macro Pitfalls — Parentheses, Double-Eval & `do-while(0)` | ★☆☆ |
-| Exercise_2 | Variadic Functions — `stdarg.h` Min/Max/Avg | ★★☆ |
-| Exercise_3 | Capstone — The Industrial Logger Module | ★★★ |
-| Exercise_4 | Conditional Compilation — Feature Flags | ★★☆ |
-| Exercise_5 | Token Pasting & Stringification (`##` and `#`) | ★★☆ |
-
-> **Prerequisite**: Review `L7_labs/demo_macro_pitfalls.c` and `L7_labs/demo_inline_vs_macro.c` before starting.
-
----
-
-## Exercise_1 [build]
+## Exercise_1 — Reading the Capacitive Touch Panel Over I2C [review-only]
 
 ### Problem Statement
 
-**Safe Macros — Parentheses, Side Effects & `do-while(0)`**
+The module you brought up in Session 06 carries two completely separate buses. The display is on SPI. The capacitive touch panel bonded to the same piece of glass is on **I2C**, talking to an FT6336U controller. Same hardware, second bus — so this exercise is purely about becoming fluent with ESP-IDF's `i2c_master` driver.
 
-**Scenario:**
-In embedded C, function-like macros are used frequently to avoid function call overhead for small math utilities like `MIN`, `ABS`, and `CLAMP`. However, poorly written macros introduce subtle, hard-to-debug bugs at the call site. Your task is to write these macros correctly from the start.
+Read the touch panel and make the display respond to it:
 
-**Requirements:**
+1. Initialise the I2C bus and add the touch controller as a device.
+2. Read the controller's ID registers once at startup and log what you found. This is your proof the bus works before any touch logic exists.
+3. Poll the panel about 20 times a second. When a finger is present, read the first touch point's X and Y coordinates.
+4. Draw a small filled square, roughly 20×20 pixels, centred on the touch point — so dragging a finger leaves a trail on screen. Log each new touch coordinate with `ESP_LOGI`.
 
-Create a new file named `main.c` from scratch. Implement the following:
+Requirements:
+- Use `driver/i2c_master.h` — `i2c_new_master_bus()`, `i2c_master_bus_add_device()`, `i2c_master_transmit_receive()`. Do not use the deprecated `driver/i2c.h`; most tutorials online still do, so check the include before copying anything.
+- Reading a register on this controller is one combined write-then-read transaction: write the register address, then read N bytes back without releasing the bus. `i2c_master_transmit_receive()` does exactly that in one call — use it rather than a transmit followed by a separate receive.
+- Drive `CTP_RST` low then high at startup to reset the touch controller before you talk to it.
+- Reuse your display code from Session 06, copied into this project, at the same 480×320 landscape orientation. `lcd_fill_rect()` is all you need from it. The SPI side must keep working unchanged while I2C runs alongside it — two drivers, two buses, one program.
+- Clamp the square's coordinates so it is never drawn partly outside the panel. A touch at the very edge must not produce a window extending past `LCD_H_RES` or `LCD_V_RES`.
+- Inside the polling loop, do **not** use `ESP_ERROR_CHECK()` on the I2C reads. That macro calls `abort()`, so one noisy read would reboot the board. Capture the `esp_err_t`, log it at `ESP_LOGW`, and carry on to the next cycle. `ESP_ERROR_CHECK()` is still correct for the one-time setup calls.
+- Every register address, I2C address and bit mask must be a named constant.
 
-1. Define `MIN(a, b)`, `ABS(x)`, and `CLAMP(val, lo, hi)` using the 4 Rules of Macros:
-   - Parenthesize all parameter uses and the full expression body.
-   - Wrap multi-statement macros with `do { ... } while(0)`.
-2. Implement `static inline uint32_t safe_min_u32(uint32_t a, uint32_t b)` as the type-safe alternative to a macro.
-3. In `main()`, call each macro and the inline function with the inputs from the **Expected Output** section below and print the results.
+### Hardware
 
-**Rules:**
-- Follow BARR-C coding style (fixed-width integers, mandatory braces).
-- All functions MUST be fully documented using Doxygen-style comments.
-- Use `cppcheck` and `clang-tidy` to analyze, and make sure there are no warning or error messages.
-- Compile with strict flags: `-Wall -Wextra -pedantic -Werror -std=c99`.
+The **MSP3526** variant of the module — the one **with** the capacitive touch panel. MSP3525 has no touch controller and cannot do this exercise; if that is what you have, tell your instructor before the deadline rather than after it.
 
-### Coding Standards Reference
+Keep every wire from Session 06 exactly as it is, and add four:
 
-This exercise is a good opportunity to study the following industry rules. Read the rule, understand *why* it exists, and apply the pattern in your code.
+| Module pin | ESP32-S3 | Role |
+| --- | --- | --- |
+| `CTP_SDA` | GPIO4 | I2C data |
+| `CTP_SCL` | GPIO5 | I2C clock |
+| `CTP_RST` | GPIO6 | touch controller reset, active low |
+| `CTP_INT` | GPIO7 | touch interrupt — wire it, but polling is what this exercise asks for |
 
-**MISRA-C 2012 (Safety):**
-| Rule | Category | Relevance to This Exercise |
-|---|---|---|
-| Rule 20.7 | Required | Expressions resulting from the expansion of macro parameters shall be enclosed in parentheses. |
-| Directive 4.9 | Advisory | A function should be used in preference to a function-like macro where they are interchangeable (use `static inline`). |
-| Rule 13.1 | Required | Initializer lists shall not contain persistent side effects (Double Evaluation hazard). |
+Once these four are added, the module is fully wired and stays that way for the rest of the course. Do not rearrange it.
 
-> **How to use:** Open the MISRA-C 2012 and CERT-C 2016 PDFs (under `C_Books/`)
-> and read the full description of each rule above. After writing your code,
-> verify your implementation follows these rules.
-
-### Design Hints (optional)
+### Design Hints
 
 ```c
-/* Hint: MIN — must parenthesize both parameters AND the full body */
-#define MIN(a, b)           /* your implementation */
+#include "driver/i2c_master.h"
 
-/* Hint: ABS — works for signed integers */
-#define ABS(x)              /* your implementation */
+#define TOUCH_I2C_ADDR   (0x38U)
+#define PIN_TOUCH_SDA    GPIO_NUM_4
+#define PIN_TOUCH_SCL    GPIO_NUM_5
+#define PIN_TOUCH_RST    GPIO_NUM_6
+#define PIN_TOUCH_INT    GPIO_NUM_7
+#define I2C_CLK_HZ       (400000U)
+#define I2C_TIMEOUT_MS   (100)   /* finite — never -1 inside a polling loop */
+#define POLL_PERIOD_MS   (50U)
 
-/* Hint: CLAMP — multi-statement, must use do { } while(0) */
-#define CLAMP(val, lo, hi)  /* your implementation */
+/* FT6336U registers */
+#define REG_TD_STATUS    (0x02U) /* low nibble = number of touch points */
+#define REG_P1_XH        (0x03U) /* then XL, YH, YL in the next three registers */
+#define REG_CHIP_ID      (0xA3U)
+#define REG_VENDOR_ID    (0xA8U)
 
-/**
- * @brief Type-safe minimum using static inline.
- *
- * @param a First value.
- * @param b Second value.
- * @return The smaller of the two values.
- */
-static inline uint32_t safe_min_u32(uint32_t a, uint32_t b);
+#define TOUCH_COORD_MASK (0x0FU) /* only the low 4 bits of the high byte are coordinate */
+
+i2c_master_bus_config_t bus_cfg = {
+    .i2c_port                     = I2C_NUM_0,
+    .sda_io_num                   = PIN_TOUCH_SDA,
+    .scl_io_num                   = PIN_TOUCH_SCL,
+    .clk_source                   = I2C_CLK_SRC_DEFAULT,
+    .glitch_ignore_cnt            = 7,
+    .flags.enable_internal_pullup = true,
+};
+
+i2c_device_config_t touch_cfg = {
+    .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+    .device_address  = TOUCH_I2C_ADDR,
+    .scl_speed_hz    = I2C_CLK_HZ,
+};
+
+/* Read `len` bytes starting at `reg`, in one transaction */
+static esp_err_t touch_read(i2c_master_dev_handle_t dev, uint8_t reg, uint8_t* buf, size_t len)
+{
+    return i2c_master_transmit_receive(dev, &reg, 1U, buf, len, I2C_TIMEOUT_MS);
+}
 ```
 
-### Acceptance Criteria (Scoring)
+A touch coordinate does not fit in one byte — the panel is up to 480 pixels across. Each axis is spread over two consecutive registers: the low byte holds the bottom 8 bits, and only the **low 4 bits** of the high byte belong to the coordinate. The upper bits of that high byte mean something else entirely, so mask before you combine. Read all four coordinate registers in a single transaction rather than four separate ones, then reassemble them in code.
 
-- **[20%]** Code builds successfully without warnings or errors.
-- **[20%]** Code passes `cppcheck` and `clang-tidy` with no warnings.
-- **[20%]** Code contains required Doxygen documentation for all functions.
-- **[20%]** `MIN`, `ABS`, and `CLAMP` macros produce the correct output shown below.
-- **[20%]** `safe_min_u32` produces the correct output shown below.
+For the ID registers, do not assume what they contain — read `REG_CHIP_ID` and `REG_VENDOR_ID`, log the raw values in hex, and compare against the FT6336U datasheet yourself. If those two reads fail, or return `0x00` or `0xFF`, your wiring or your pull-ups are wrong and no amount of touch logic will help.
+
+### Suggested Approach
+
+```
+1. Init the display exactly as in Session 06, clear it to black
+2. Reset the touch controller: CTP_RST low, delay, high, delay
+3. i2c_new_master_bus() -> i2c_master_bus_add_device()
+4. Read REG_CHIP_ID and REG_VENDOR_ID, ESP_LOGI them in hex.
+   Stop and fix your wiring here if this step does not work.
+5. forever:
+     a. read REG_TD_STATUS -> how many fingers are down?
+     b. if at least one:
+          read the four coordinate registers in one transaction
+          mask and combine into x and y
+          clamp so the square stays fully on screen
+          ESP_LOGI the coordinates
+          lcd_fill_rect() a small square there
+     c. vTaskDelay(pdMS_TO_TICKS(POLL_PERIOD_MS))
+```
+
+The interesting part is the last mile, and it is worth budgeting real time for. The touch controller reports coordinates in **its own** orientation, which is the panel's native portrait, while your display is running in the landscape orientation you set with `MADCTL` in Session 06. The two do not agree, so a raw coordinate pair will not land where your finger is.
+
+Work out the mapping empirically rather than by reasoning about it in the abstract: log the raw values, drag your finger deliberately along each edge of the screen, and write down what the numbers do. From that you can see whether you need to swap the two axes, invert one of them, or both. Note in a comment what you concluded and the range you actually observed on each axis — the observed range is the useful part, because it tells the next person whether an axis really spans the full 0–479 or something narrower.
 
 ### Expected Output
 
+At startup, before any touch — the exact ID values are whatever your controller reports, so treat the shape of the line as the target, not the numbers:
+
 ```
-=== Exercise 1: Safe Macros ===
-MIN(3, 5)            = 3
-ABS(-7)              = 7
-ABS(5 - 10)          = 5
-CLAMP(15, 0, 10)     = 10
-CLAMP(-3, 0, 10)     = 0
-safe_min_u32(3, 5)   = 3
+I (0318) TOUCH: chip_id=0x?? vendor_id=0x??
+I (0322) TOUCH: display ready, waiting for touch
 ```
 
-Exit code: `0` on success.
+Then dragging a finger across the glass leaves a trail of small squares following it, and the log fills with coordinates:
+
+```
+I (4820) TOUCH: touch @ x=142 y=201
+I (4871) TOUCH: touch @ x=150 y=207
+I (4922) TOUCH: touch @ x=163 y=219
+```
+
+Lifting the finger stops both the squares and the logging. The trail stays on screen — you are not required to clear it.
+
+The square must appear **under your fingertip**, not mirrored to the opposite side and not with the axes transposed. If it does not, that is the coordinate mapping described above, and it is part of the exercise rather than a bug in the driver.
 
 ### Submission
 
 ```
 Exercise_1/
-├── main.c        (required)
-└── Makefile      (required — targets: all, clean)
-```
-
----
-
-## Exercise_2 [build]
-
-### Problem Statement
-
-**Variadic Functions — `stdarg.h`**
-
-**Scenario:**
-Embedded APIs often need to accept a flexible number of arguments. For example, computing statistics over a dynamic number of sensor readings.
-
-**Requirements:**
-
-Implement `void compute_stats(uint32_t count, ...)` in a new `main.c` from scratch, using the standard variadic argument macros.
-
-Behavior:
-1. Initialize a `va_list`.
-2. Use `va_start()` using the `count` parameter.
-3. Iterate `count` times using `va_arg()`.
-   - **Crucial Note:** Default argument promotions apply! Small integer types passed to variadic functions are promoted to `int`. You MUST read them as `va_arg(ap, int)` before casting/storing them into `int32_t`.
-4. Calculate min, max, and average (sum / count).
-5. Call `va_end()`.
-6. Return the populated `stats_t` struct.
-
-**Rules:**
-- Follow BARR-C coding style.
-- **Code Documentation:** All functions MUST be fully documented using Doxygen-style comments.
-- Use `cppcheck` and `clang-tidy` to analyze, and make sure there are no warning or error messages.
-- Compile with strict flags: `-Wall -Wextra -pedantic -Werror -std=c99`.
-
-### Coding Standards Reference
-
-**CERT-C 2016 (Security):**
-| Rule | Relevance to This Exercise |
-|---|---|
-| EXP58-C | Call `va_start()` before accessing arguments, and `va_end()` before the function returns. |
-| INT31-C | Ensure that integer conversions (e.g., pulling `int` from `va_arg` and casting to `int32_t`) do not result in lost or misinterpreted data. |
-
-> **How to use:** Open the MISRA-C 2012 and CERT-C 2016 PDFs (under `C_Books/`)
-> and read the full description of each rule above. After writing your code,
-> verify your implementation follows these rules.
-
-### Design Hints (optional)
-
-```c
-typedef struct {
-    int32_t min;
-    int32_t max;
-    int32_t average;
-} stats_t;
-
-stats_t compute_stats(uint32_t count, ...) {
-    stats_t result = {0, 0, 0};
-    if (count == 0) return result;
-    
-    va_list ap;
-    va_start(ap, count);
-    // Loop and use va_arg(ap, int)
-    va_end(ap);
-    return result;
-}
-```
-
-### Acceptance Criteria (Scoring)
-
-- **[15%]** Code builds successfully without warnings or errors.
-- **[15%]** Code passes static analysis without warnings.
-- **[30%]** Correct usage of `va_start`, `va_arg`, and `va_end`.
-- **[25%]** Min, Max, and Average calculate correctly for positive and negative numbers.
-- **[15%]** Edge cases (count = 0, count = 2 identical numbers) handled gracefully without division by zero.
-
-### Expected Output
-
-```
-=== Exercise 2: Variadic Stats ===
-
-Test 1 (5, 10, -5, 20, 0, 5):
-Min: -5
-Max: 20
-Avg: 6
-
-Test 2 (2, 42, 42):
-Min: 42
-Max: 42
-Avg: 42
-
-Test 3 (0 args):
-Min: 0
-Max: 0
-Avg: 0
-```
-
-### Submission
-
-```
-Exercise_2/
-├── main.c        (required)
-└── Makefile      (required — targets: all, clean)
-```
-
----
-
-## Exercise_3 [build]
-
-### Problem Statement
-
-**Capstone — The Industrial Logger Module**
-
-**Scenario:**
-In bare-metal firmware, standard `printf()` is slow, blocks the CPU, and lacks crucial debugging context (like file and line numbers). You need a professional logging module that prints the log level, filename, line number, function name, and formatted message — but only if the log level is enabled at compile time!
-
-**Requirements:**
-
-Create a new `main.c` from scratch. Build the logging module:
-
-**Step 1:** Implement `log_write()`. It receives the pre-evaluated log level, the call-site location (`file`, `line`, `func`), and variadic arguments.
-- Format the output string. (For this lab, use `vprintf` to simulate UART output).
-- Only print if `level <= LOG_LEVEL_MAX`.
-
-**Step 2:** Define the public macros `LOG_ERROR`, `LOG_WARNING`, `LOG_INFO`, `LOG_DEBUG`.
-- Must use `do { ... } while(0)`.
-- Must automatically pass `__FILE__`, `__LINE__`, and `__func__` to `log_write()`.
-- Must forward variadic arguments correctly using the GCC extension `##__VA_ARGS__`.
-
-**Rules:**
-- Follow BARR-C coding style.
-- **Code Documentation:** All functions MUST be fully documented using Doxygen-style comments.
-- Use `cppcheck` and `clang-tidy` to analyze, and make sure there are no warning or error messages.
-- Compile the code using `-DLOG_LEVEL_MAX=LOG_LEVEL_DEBUG` to test all levels.
-- Re-compile with `-DLOG_LEVEL_MAX=LOG_LEVEL_WARNING` and verify that INFO and DEBUG logs completely disappear from the output.
-
-### Coding Standards Reference
-
-**MISRA-C 2012 (Safety):**
-| Rule | Category | Relevance to This Exercise |
-|---|---|---|
-| Rule 20.10 | Advisory | The `#` and `##` preprocessor operators should not be used. (Note: In logging modules, `##__VA_ARGS__` is a standard, acceptable violation of this rule in Zephyr/Linux). |
-| Rule 21.6 | Required | The Standard Library input/output functions shall not be used (In real firmware, replace `printf` with a UART driver). |
-
-> **How to use:** Open the MISRA-C 2012 and CERT-C 2016 PDFs (under `C_Books/`)
-> and read the full description of each rule above. After writing your code,
-> verify your implementation follows these rules.
-
-### Design Hints (optional)
-
-```c
-__attribute__((format(printf, 5, 6)))
-void log_write(log_level_t level, const char *file, uint32_t line, 
-               const char *func, const char *fmt, ...) 
-{
-    if (level <= LOG_LEVEL_MAX) {
-        // Print prefix using level, file, line, func
-        va_list ap;
-        va_start(ap, fmt);
-        vprintf(fmt, ap); // Or vsnprintf into a buffer
-        va_end(ap);
-        printf("\n");
-    }
-}
-
-#define LOG_ERROR(fmt, ...) \
-    do { \
-        if (LOG_LEVEL_ERROR <= LOG_LEVEL_MAX) { \
-            log_write(LOG_LEVEL_ERROR, __FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__); \
-        } \
-    } while(0)
-```
-
-### Acceptance Criteria (Scoring)
-
-- **[10%]** Code builds successfully and passes static analysis.
-- **[25%]** `log_write` uses `vprintf` or `vsnprintf` correctly.
-- **[25%]** Macros capture `__FILE__`, `__LINE__`, and `__func__` automatically.
-- **[15%]** Macros correctly forward variadic arguments using `##__VA_ARGS__`.
-- **[25%]** Compile-time filtering works correctly depending on the passed `-DLOG_LEVEL_MAX`.
-
-### Expected Output
-
-```
-=== Exercise 3: Industrial Logger ===
-Compiled with LOG_LEVEL_MAX = 3
-
-[INFO ] main.c:65 (main) | System boot. Build time: 12:00:00
-[DEBUG] main.c:68 (main) | Discovered 4 sensors on I2C bus.
-[WARN ] main.c:70 (main) | Sensor 2 reading is unstable.
-[ERROR] main.c:72 (main) | Watchdog timeout! Rebooting in 500 ms.
-[INFO ] main.c:75 (main) | Boot sequence complete.
-```
-
-### Submission
-
-```
-Exercise_3/
-├── main.c        (required)
-└── Makefile      (required — targets: all, clean)
-```
-
----
-
-## Exercise_4 [build]
-
-### Problem Statement
-
-**Conditional Compilation — Feature Flags**
-
-**Scenario:**
-Because memory is highly constrained in embedded systems, you cannot afford to link drivers that you aren't using. If a customer buys the Wi-Fi version of your IoT device, the Ethernet driver should not just be inactive—it should be entirely excluded from the compile process to save Flash memory. 
-
-**Requirements:**
-
-Create a new `main.c` from scratch. Implement a hardware abstraction layer (HAL) that uses Conditional Compilation to determine which driver to initialize.
-
-1. Implement two simulated drivers: `wifi_driver_init()` and `ethernet_driver_init()`.
-2. Use the **Best Practice** `#if defined()` syntax to check for compile-time macros: `CONFIG_WIFI_ENABLED` and `CONFIG_ETHERNET_ENABLED`.
-3. If Wi-Fi is enabled, only compile the Wi-Fi init call.
-4. If Ethernet is enabled, only compile the Ethernet init call.
-5. **Bonus Constraint**: If the user tries to compile with BOTH enabled, throw a compile-time error using `#error "Cannot enable both WiFi and Ethernet at the same time!"`.
-6. If neither is enabled, throw a compile-time error `#error "At least one network interface must be enabled!"`.
-
-**Rules:**
-- Follow BARR-C coding style.
-- Compile multiple times passing different flags via `-D` to test the logic (e.g., `gcc -DCONFIG_WIFI_ENABLED -o main main.c`).
-- Use `cppcheck` and `clang-tidy` to analyze, and make sure there are no warning or error messages.
-
-### Coding Standards Reference
-
-**MISRA-C 2012 (Safety):**
-| Rule | Category | Relevance to This Exercise |
-|---|---|---|
-| Rule 20.9 | Required | All identifiers used in the controlling expression of `#if` or `#elif` shall be defined before evaluation. (Use `#if defined(X)` to safely check existence). |
-
-> **How to use:** Open the MISRA-C 2012 and CERT-C 2016 PDFs (under `C_Books/`)
-> and read the full description of each rule above. After writing your code,
-> verify your implementation follows these rules.
-
-### Design Hints (optional)
-
-```c
-#if defined(CONFIG_WIFI_ENABLED) && defined(CONFIG_ETHERNET_ENABLED)
-    #error "Cannot enable both WiFi and Ethernet at the same time!"
-#elif defined(CONFIG_WIFI_ENABLED)
-    // Call wifi init
-#elif defined(CONFIG_ETHERNET_ENABLED)
-    // Call ethernet init
-#else
-    #error "At least one network interface must be enabled!"
-#endif
-```
-
-### Acceptance Criteria (Scoring)
-
-- **[25%]** Code successfully uses `#if defined()` and `#elif defined()`.
-- **[25%]** Wi-Fi driver compiles and runs when `-DCONFIG_WIFI_ENABLED` is passed.
-- **[25%]** Ethernet driver compiles and runs when `-DCONFIG_ETHERNET_ENABLED` is passed.
-- **[25%]** `#error` directives correctly prevent compilation if both or neither are defined.
-
-### Expected Output
-
-When compiled with `gcc -DCONFIG_WIFI_ENABLED -o main main.c`:
-```
-=== Exercise 4: Feature Flags ===
-[NET] Initializing Wi-Fi Driver...
-```
-
-When compiled with `gcc -DCONFIG_WIFI_ENABLED -DCONFIG_ETHERNET_ENABLED -o main main.c`:
-```
-main.c:15:6: error: #error "Cannot enable both WiFi and Ethernet at the same time!"
-```
-
-### Submission
-
-```
-Exercise_4/
-├── main.c        (required)
-└── Makefile      (required — targets: all, clean)
-```
-
----
-
-## Exercise_5 [build]
-
-### Problem Statement
-
-**Token Pasting & Stringification (`##` and `#`)**
-
-**Scenario:**
-While MISRA-C restricts the use of the `#` (stringify) and `##` (token pasting) operators (Rule 20.10) because they can make code difficult to read and analyze, they remain heavily used in major embedded operating systems like Zephyr RTOS and Linux. They are commonly used to automatically generate struct names, driver initialization boilerplate, and Kconfig version strings. Therefore, understanding how they work is an essential skill for any embedded engineer.
-
-**Requirements:**
-
-Create a new `main.c` from scratch. Implement the following:
-
-1. **Token Pasting (`##`) — Device Name Generation**:
-   Implement a `DEFINE_DEVICE(name, id)` macro that generates a uniquely named `struct device` variable at compile time.
-   - `DEFINE_DEVICE(spi, 1)` must expand to: `struct device device_spi_1 = { .dev_id = 1 };`
-   - `DEFINE_DEVICE(i2c, 2)` must expand to: `struct device device_i2c_2 = { .dev_id = 2 };`
-   - In `main()`, print the `dev_id` of each generated variable.
-
-2. **Stringification (`#`) — Firmware Version String**:
-   Implement `STRINGIFY(x)` and `TO_STRING(x)` (two-level macro). The two levels are required so that a defined macro is expanded *before* being stringified.
-   - Define three macros: `FW_VERSION_MAJOR 3`, `FW_VERSION_MINOR 0`, `FW_VERSION_PATCH 4`.
-   - Build a version string by concatenating the individually stringified parts with `.` separators:
-     ```
-     TO_STRING(FW_VERSION_MAJOR) "." TO_STRING(FW_VERSION_MINOR) "." TO_STRING(FW_VERSION_PATCH)
-     ```
-     C automatically merges adjacent string literals, so the result is `"3.0.4"` at compile time.
-   - Define a single macro `FW_VERSION_STRING` that uses the pattern above.
-   - In `main()`, print: `Firmware version: 3.0.4`
-
-3. **Zephyr Device Tree Mock — Address Lookup via Token Pasting**:
-   In real Zephyr RTOS, each hardware peripheral's register address is stored in a `#define` constant with a long, generated name (e.g. `DT_N_NODELABEL_my_i2c_REG_ADDR`). Rather than typing this full name, developers call a short helper macro like `DT_REG_ADDR(DT_N_NODELABEL_my_i2c)`. Under the hood, this macro uses `##` to paste the argument with `_REG_ADDR`, constructing the full constant name at compile time.
-
-   **Important**: `DT_REG_ADDR()` is NOT a function — it does not run at runtime and does not "return" anything. The preprocessor replaces the macro call with the value of the matching `#define` constant before the code is compiled. The result is a compile-time constant, identical to writing `0x40003000U` directly.
-
-   Example of what the preprocessor does, step by step:
-   ```
-   DT_REG_ADDR(DT_N_NODELABEL_my_i2c)
-           ↓  ## pastes the tokens
-   DT_N_NODELABEL_my_i2c_REG_ADDR
-           ↓  preprocessor substitutes the #define
-   0x40003000U
-   ```
-
-   Your task:
-   - Define the raw address constant: `#define DT_N_NODELABEL_my_i2c_REG_ADDR 0x40003000U`
-   - Implement `DT_REG_ADDR(node_id)` using `##` so that `DT_REG_ADDR(DT_N_NODELABEL_my_i2c)` pastes `node_id` with `_REG_ADDR` and resolves to `0x40003000U` at compile time.
-   - In `main()`, write: `uint32_t p_i2c_base = DT_REG_ADDR(DT_N_NODELABEL_my_i2c);` and print it with `printf("I2C base address: 0x%08X\n", p_i2c_base);`.
-   - Verify by running `gcc -E main.c` and confirming the macro call is replaced by the raw constant in the preprocessed output.
-**Rules:**
-- Follow BARR-C coding style.
-- Use `cppcheck` and `clang-tidy` to analyze, and make sure there are no warning or error messages.
-
-### Coding Standards Reference
-
-**MISRA-C 2012 (Safety):**
-| Rule | Category | Relevance to This Exercise |
-|---|---|---|
-| Rule 20.10 | Advisory | The `#` and `##` preprocessor operators should not be used. (Note: This exercise intentionally explores them because they are standard practice in Linux/Zephyr for driver boilerplate). |
-
-> **How to use:** Open the MISRA-C 2012 and CERT-C 2016 PDFs (under `C_Books/`)
-> and read the full description of each rule above. After writing your code,
-> verify your implementation follows these rules.
-
-### Design Hints (optional)
-
-```c
-struct device {
-    uint32_t dev_id;
-};
-
-/* Token pasting — generates a unique variable name at compile time */
-#define DEFINE_DEVICE(name, id) \
-    struct device device_ ## name ## _ ## id = { .dev_id = (id) }
-
-/* Stringification — two levels ensure macros are expanded before stringifying */
-#define STRINGIFY(x)  #x
-#define TO_STRING(x)  STRINGIFY(x)
-
-/* Version string — C merges adjacent string literals at compile time */
-#define FW_VERSION_MAJOR  3
-#define FW_VERSION_MINOR  0
-#define FW_VERSION_PATCH  4
-/* Hint: FW_VERSION_STRING should produce "3.0.4" */
-#define FW_VERSION_STRING  /* your implementation using TO_STRING and "." */
-
-/* DT mock — paste node_id with _REG_ADDR to form the full constant name */
-#define DT_REG_ADDR(node_id)  /* your implementation */
-```
-
-### Acceptance Criteria (Scoring)
-
-- **[20%]** Code successfully uses `##` to dynamically name the device structs (e.g., `device_spi_1`).
-- **[20%]** `FW_VERSION_STRING` correctly produces `"3.0.4"` by concatenating three individually stringified macros.
-- **[20%]** Code successfully uses `##` to implement `DT_REG_ADDR`, and `main()` stores the result in a `uint32_t` variable and prints it.
-- **[20%]** The `main()` function output matches the Expected Output exactly.
-- **[20%]** Code passes static analysis.
-
-### Expected Output
-
-```
-=== Exercise 5: Token Pasting & Stringification ===
-Firmware version: 3.0.4
-Initialized SPI device with ID: 1
-Initialized I2C device with ID: 2
-I2C reg addr: 0x40003000
-```
-
-### Submission
-
-```
-Exercise_5/
-├── main.c        (required)
-├── Makefile      (required — targets: all, clean)
-└── *.h           (if any)
+├── main/
+│   ├── main.c              (required — i2c_master driver + SPI display from Session 06)
+│   └── CMakeLists.txt      (required)
+└── CMakeLists.txt          (required — ESP-IDF project root)
 ```
