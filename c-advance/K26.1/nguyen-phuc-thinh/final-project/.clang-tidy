@@ -1,0 +1,10 @@
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  misc-*
+WarningsAsErrors: >
+  bugprone-*,
+  cert-*
+HeaderFilterRegex: 'components/.*\.h$'

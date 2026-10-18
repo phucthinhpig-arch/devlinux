@@ -1,0 +1,6 @@
+add_subdirectory(common)
+add_subdirectory(hal)
+add_subdirectory(drivers)
+add_subdirectory(data)
+add_subdirectory(telemetry)
+add_subdirectory(app)
